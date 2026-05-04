@@ -324,3 +324,24 @@ CREATE POLICY "Allow all projects" ON projects FOR ALL USING (true) WITH CHECK (
 CREATE POLICY "Allow all orders" ON orders FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all deposits" ON deposits FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all support_tickets" ON support_tickets FOR ALL USING (true) WITH CHECK (true);
+
+-- ========================
+-- ROLE GRANTS
+-- Required for PostgREST (Supabase REST API) to access tables.
+-- RLS policies alone are not enough — the PostgreSQL roles also need
+-- schema USAGE and table-level privileges.
+-- ========================
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+
+-- Ensure future tables created by migrations also get these grants
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES TO anon;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL ON TABLES TO authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role;

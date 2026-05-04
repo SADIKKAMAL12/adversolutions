@@ -2,17 +2,36 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { pathToFileURL } from 'url'
+import fs from 'fs'
+
+// Load .env vars into process.env (Vite only exposes VITE_* to the browser,
+// not to Node.js process.env, so the serverless handlers can't see them otherwise)
+function loadEnvIntoProcess() {
+  try {
+    const raw = fs.readFileSync(path.join(process.cwd(), '.env'), 'utf8')
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/)
+      if (!m) continue
+      const [, key, val] = m
+      if (!process.env[key]) {
+        process.env[key] = val.replace(/^['"]|['"]$/g, '').trim()
+      }
+    }
+  } catch { /* .env is optional */ }
+}
 
 // Serves api/**/*.js handlers locally, mimicking Vercel's serverless routing
 function localApiPlugin() {
+  loadEnvIntoProcess()
+
+  // admin-supabase.js reads SUPABASE_URL; alias from VITE_SUPABASE_URL if absent
+  if (!process.env.SUPABASE_URL && process.env.VITE_SUPABASE_URL) {
+    process.env.SUPABASE_URL = process.env.VITE_SUPABASE_URL
+  }
+
   return {
     name: 'local-api',
     configureServer(server) {
-      // admin-supabase.js reads SUPABASE_URL; alias from VITE_SUPABASE_URL if absent
-      if (!process.env.SUPABASE_URL && process.env.VITE_SUPABASE_URL) {
-        process.env.SUPABASE_URL = process.env.VITE_SUPABASE_URL
-      }
-
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/')) return next()
 
@@ -58,6 +77,7 @@ function localApiPlugin() {
         try {
           await handler({ method: req.method, url: req.url, headers: req.headers, body, query }, fakeRes)
         } catch (err) {
+          console.error(`[api] ${req.method} ${url.pathname} →`, err.message)
           res.writeHead(500, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ error: err.message }))
         }

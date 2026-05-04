@@ -16,8 +16,8 @@ export default async function handler(req, res) {
       const { names } = req.body
       if (!Array.isArray(names)) return res.status(400).json({ error: 'names array required' })
 
-      // Delete all existing
-      await getAdminSupabase().from('business_types').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      // Delete all existing (filter on name avoids id-type mismatch between SERIAL vs UUID schemas)
+      await getAdminSupabase().from('business_types').delete().not('name', 'is', null)
 
       // Insert new ones
       if (names.length > 0) {
