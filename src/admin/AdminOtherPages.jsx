@@ -36,7 +36,8 @@ export function AdminInventoryPage({ products, lines, setStore }) {
   const [view, setView] = useState("list");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [bulkInput, setBulkInput] = useState("");
-  const [newProduct, setNewProduct] = useState({ title: "", platform: "Meta", type: "Aged", price: "", country: "", description: "" });
+  const [newProduct, setNewProduct] = useState({ title: "", platform: "Meta", customPlatform: "", type: "Aged", price: "", country: "", description: "" });
+  const [logoPreview, setLogoPreview] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -70,14 +71,16 @@ export function AdminInventoryPage({ products, lines, setStore }) {
       setError("");
       try {
         const productId = `prod-${Date.now()}`;
+        const resolvedPlatform = newProduct.platform === "Other" ? (newProduct.customPlatform || "Other") : newProduct.platform;
         const product = {
           id: productId,
           title: newProduct.title,
-          platform: newProduct.platform,
+          platform: resolvedPlatform,
           type: newProduct.type,
           price: Number(newProduct.price),
           country: newProduct.country || "",
           description: newProduct.description || "",
+          logo: logoPreview || null,
           created: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
         };
 
@@ -107,7 +110,8 @@ export function AdminInventoryPage({ products, lines, setStore }) {
         }));
 
         setView("list");
-        setNewProduct({ title: "", platform: "Meta", type: "Aged", price: "", country: "", description: "" });
+        setNewProduct({ title: "", platform: "Meta", customPlatform: "", type: "Aged", price: "", country: "", description: "" });
+        setLogoPreview(null);
         setBulkInput("");
       } catch (err) {
         setError('Failed to save: ' + err.message);
@@ -129,20 +133,46 @@ export function AdminInventoryPage({ products, lines, setStore }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
           <Card>
             <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 800 }}>Product Information</h3>
+
+            {/* Logo upload */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: C.g500, fontWeight: 600, marginBottom: 6 }}>Product Logo <span style={{ color: C.g300, fontWeight: 400 }}>(500 × 500 px recommended)</span></div>
+              <label style={{ cursor: "pointer" }}>
+                <div style={{ width: 110, height: 110, border: `2px dashed ${logoPreview ? C.primary : C.g200}`, borderRadius: 14, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: logoPreview ? C.primaryLight : C.g50, overflow: "hidden", transition: "all .15s" }}>
+                  {logoPreview
+                    ? <img src={logoPreview} alt="logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : <><div style={{ fontSize: 28, color: C.g300, marginBottom: 4 }}>↑</div><div style={{ fontSize: 11, color: C.g400, textAlign: "center", lineHeight: 1.4 }}>Upload<br/>Logo</div></>
+                  }
+                </div>
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+                  const file = e.target.files[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = ev => setLogoPreview(ev.target.result);
+                  reader.readAsDataURL(file);
+                }} />
+              </label>
+              {logoPreview && (
+                <button onClick={() => setLogoPreview(null)} style={{ marginTop: 6, background: "none", border: "none", fontSize: 12, color: C.red, cursor: "pointer", padding: 0 }}>✕ Remove</button>
+              )}
+            </div>
+
             <Input label="Product Title" required value={newProduct.title} onChange={e => setNewProduct(p => ({ ...p, title: e.target.value }))} placeholder="e.g. Meta Aged Accounts (US)" />
-            <Input label="Short Description" value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Brief description about this account type" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Select label="Platform" required value={newProduct.platform} onChange={e => setNewProduct(p => ({ ...p, platform: e.target.value }))}
                 options={["Meta", "Google", "TikTok", "Snapchat", "Twitter", "LinkedIn", "Other"]} />
               <Select label="Account Type" required value={newProduct.type} onChange={e => setNewProduct(p => ({ ...p, type: e.target.value }))}
                 options={["Aged", "Fresh"]} />
             </div>
+            {newProduct.platform === "Other" && (
+              <Input label="Platform Name" required value={newProduct.customPlatform} onChange={e => setNewProduct(p => ({ ...p, customPlatform: e.target.value }))} placeholder="e.g. Pinterest, Reddit…" />
+            )}
             <Input label="Country" value={newProduct.country} onChange={e => setNewProduct(p => ({ ...p, country: e.target.value }))} placeholder="Any country" />
             <Input label="Price (USD)" required type="number" value={newProduct.price} onChange={e => setNewProduct(p => ({ ...p, price: e.target.value }))} placeholder="120.00" />
           </Card>
           <Card>
             <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 800 }}>Product Description</h3>
-            <textarea rows={8} value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Write a detailed description..."
+            <textarea rows={10} value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Write a detailed description about this account type…"
               style={{ width: "100%", border: `1px solid ${C.g200}`, borderRadius: 10, padding: "12px 14px", fontSize: 13, resize: "vertical", boxSizing: "border-box", outline: "none", fontFamily: "inherit" }} />
           </Card>
         </div>
