@@ -99,7 +99,9 @@ export async function fetchInventoryProducts() {
 }
 
 export async function fetchInventoryLines() {
-  return apiGet(`${API_BASE}/inventory-lines`)
+  const data = await apiGet(`${API_BASE}/inventory-lines`)
+  // DB returns product_id (snake_case); app code uses productId (camelCase)
+  return (data || []).map(l => ({ ...l, productId: l.product_id ?? l.productId }))
 }
 
 export async function updateInventoryLine(id, updates) {
@@ -151,7 +153,9 @@ export async function updateDeposit(id, updates) {
 // ========================
 
 export async function fetchMediaBuyers() {
-  return apiGet(`${API_BASE}/media-buyers`, { order: 'id', ascending: 'false' })
+  const data = await apiGet(`${API_BASE}/media-buyers`, { order: 'id', ascending: 'false' })
+  // DB returns reject_reason (snake_case); app code uses rejectReason (camelCase)
+  return (data || []).map(m => ({ ...m, rejectReason: m.reject_reason ?? m.rejectReason }))
 }
 
 export async function updateMediaBuyer(id, updates) {
