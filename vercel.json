@@ -1,0 +1,26 @@
+{
+  "rewrites": [
+    { "source": "/api/users", "destination": "/api/crud?table=users" },
+    { "source": "/api/transactions", "destination": "/api/crud?table=transactions" },
+    { "source": "/api/orders", "destination": "/api/crud?table=orders" },
+    { "source": "/api/deposits", "destination": "/api/crud?table=deposits" },
+    { "source": "/api/media-buyers", "destination": "/api/crud?table=media_buyers" },
+    { "source": "/api/payment-methods", "destination": "/api/crud?table=payment_methods" },
+    { "source": "/api/business-types", "destination": "/api/crud?table=business_types" },
+    { "source": "/api/support-tickets", "destination": "/api/crud?table=support_tickets" },
+    { "source": "/api/inventory-products", "destination": "/api/crud?table=inventory_products" },
+    { "source": "/api/inventory-lines", "destination": "/api/crud?table=inventory_lines" },
+    { "source": "/api/purchases", "destination": "/api/crud?table=purchases" },
+    { "source": "/api/projects", "destination": "/api/crud?table=projects" },
+    { "source": "/api/announcements", "destination": "/api/crud?table=announcements" },
+    { "source": "/api/ad-account-requests", "destination": "/api/crud?table=ad_account_requests" },
+    { "source": "/api/settings", "destination": "/api/crud?table=settings" },
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 10
+    }
+  }
+}

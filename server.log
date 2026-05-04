@@ -1,0 +1,27 @@
+::1 - - [03/May/2026 13:30:50] "GET /index.html HTTP/1.1" 200 -
+::1 - - [03/May/2026 13:31:41] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 13:31:41] code 404, message File not found
+::1 - - [03/May/2026 13:31:41] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [03/May/2026 14:15:51] "GET /index.html HTTP/1.1" 200 -
+::1 - - [03/May/2026 14:22:25] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 14:22:46] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 14:22:47] code 404, message File not found
+::1 - - [03/May/2026 14:22:47] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [03/May/2026 14:22:55] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 14:22:56] code 404, message File not found
+::1 - - [03/May/2026 14:22:56] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [03/May/2026 14:23:03] code 404, message File not found
+::1 - - [03/May/2026 14:23:03] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+::1 - - [03/May/2026 14:23:22] code 404, message File not found
+::1 - - [03/May/2026 14:23:22] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+::1 - - [03/May/2026 14:24:55] "GET / HTTP/1.1" 304 -
+::1 - - [03/May/2026 14:30:02] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 14:30:09] "GET / HTTP/1.1" 304 -
+::1 - - [03/May/2026 14:30:13] "GET / HTTP/1.1" 304 -
+::1 - - [03/May/2026 14:35:04] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 14:37:44] "GET / HTTP/1.1" 304 -
+::1 - - [03/May/2026 14:45:11] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 16:04:33] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 16:04:33] "GET /src/main.jsx HTTP/1.1" 200 -
+::1 - - [03/May/2026 19:33:11] "GET / HTTP/1.1" 200 -
+::1 - - [03/May/2026 19:33:11] "GET /src/main.jsx HTTP/1.1" 200 -
