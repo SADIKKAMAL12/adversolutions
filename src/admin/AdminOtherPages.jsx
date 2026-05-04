@@ -257,7 +257,7 @@ export function AdminInventoryPage({ products, lines, setStore }) {
           return (
             <Card key={prod.id} onClick={() => setSelectedProduct(prod)} style={{ cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                <PlatformIcon name={prod.platform} size={22} />
+                <PlatformIcon name={prod.platform} size={22} logo={prod.logo} />
                 <span style={{ background: prod.type === "Aged" ? C.greenL : C.blueL, color: prod.type === "Aged" ? C.green : C.blue, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20 }}>{prod.type}</span>
               </div>
               <div style={{ fontWeight: 900, fontSize: 14, color: C.g800, marginBottom: 3 }}>{prod.title}</div>

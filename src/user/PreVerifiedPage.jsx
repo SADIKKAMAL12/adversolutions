@@ -84,7 +84,7 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
         <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
           <Card>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-              <PlatformIcon name={selectedProduct.platform} size={32} />
+              <PlatformIcon name={selectedProduct.platform} size={32} logo={selectedProduct.logo} />
               <div>
                 <div style={{ fontWeight: 900, fontSize: 18, color: C.g800 }}>{selectedProduct.title}</div>
                 <div style={{ fontSize: 12, color: C.g400 }}>ID: {selectedProduct.id}</div>
@@ -167,7 +167,7 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
           return (
             <Card key={acc.id} onClick={() => { setSelectedProduct(acc); setView("product"); }} style={{ cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-                <PlatformIcon name={acc.platform} size={26} />
+                <PlatformIcon name={acc.platform} size={26} logo={acc.logo} />
                 <span style={{ background: acc.type === "Aged" ? C.greenL : C.blueL, color: acc.type === "Aged" ? C.green : C.blue, fontSize: 11, fontWeight: 800, padding: "3px 9px", borderRadius: 20 }}>{acc.type}</span>
               </div>
               <div style={{ fontWeight: 900, fontSize: 15, color: C.g800, marginBottom: 3 }}>{acc.title}</div>
