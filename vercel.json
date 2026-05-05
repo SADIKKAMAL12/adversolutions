@@ -14,6 +14,7 @@
     { "source": "/api/projects", "destination": "/api/crud?table=projects" },
     { "source": "/api/announcements", "destination": "/api/crud?table=announcements" },
     { "source": "/api/ad-account-requests", "destination": "/api/crud?table=ad_account_requests" },
+    { "source": "/api/platform-prices", "destination": "/api/crud?table=platform_prices" },
     { "source": "/api/settings", "destination": "/api/crud?table=settings" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }

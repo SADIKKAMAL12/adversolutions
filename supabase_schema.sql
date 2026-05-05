@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE TABLE IF NOT EXISTS ad_account_requests (
   id TEXT PRIMARY KEY,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_email TEXT,
   platform TEXT NOT NULL,
   account_name TEXT,
   timezone TEXT,
@@ -41,10 +42,21 @@ CREATE TABLE IF NOT EXISTS ad_account_requests (
   business_name TEXT,
   business_type TEXT,
   business_email TEXT,
+  country TEXT,
+  phone TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
   amount NUMERIC(12,2),
+  request_id TEXT,
+  submitted_at TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Add columns to existing table if already created without them
+ALTER TABLE ad_account_requests ADD COLUMN IF NOT EXISTS user_email TEXT;
+ALTER TABLE ad_account_requests ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE ad_account_requests ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE ad_account_requests ADD COLUMN IF NOT EXISTS request_id TEXT;
+ALTER TABLE ad_account_requests ADD COLUMN IF NOT EXISTS submitted_at TEXT;
 
 -- Inventory Products
 CREATE TABLE IF NOT EXISTS inventory_products (
@@ -55,7 +67,8 @@ CREATE TABLE IF NOT EXISTS inventory_products (
   description TEXT,
   price NUMERIC(12,2) NOT NULL,
   country TEXT,
-  created TEXT
+  created TEXT,
+  logo TEXT
 );
 
 -- Inventory Lines (individual credentials)
@@ -73,7 +86,15 @@ CREATE TABLE IF NOT EXISTS purchases (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   product_id TEXT REFERENCES inventory_products(id),
+  product_title TEXT,
+  platform TEXT,
+  price NUMERIC(12,2),
   line_id TEXT REFERENCES inventory_lines(id),
+  email TEXT,
+  password TEXT,
+  twofa TEXT,
+  purchased_at TEXT,
+  logo TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -96,6 +117,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_email TEXT,
   type TEXT NOT NULL,
   platform TEXT,
   item TEXT,
@@ -143,7 +165,10 @@ CREATE TABLE IF NOT EXISTS media_buyers (
 CREATE TABLE IF NOT EXISTS payment_methods (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  bank_name TEXT,
+  logo TEXT,
   account TEXT,
+  fields JSONB DEFAULT '[]'::jsonb,
   active BOOLEAN NOT NULL DEFAULT true
 );
 
@@ -163,6 +188,16 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   status TEXT NOT NULL DEFAULT 'open',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Platform Prices (admin-controlled pricing per platform)
+CREATE TABLE IF NOT EXISTS platform_prices (
+  id TEXT PRIMARY KEY,
+  price NUMERIC(12,2) NOT NULL DEFAULT 50,
+  fee NUMERIC(5,2) NOT NULL DEFAULT 6,
+  min_topup NUMERIC(12,2) NOT NULL DEFAULT 200,
+  active BOOLEAN NOT NULL DEFAULT true
+);
+ALTER TABLE platform_prices ADD COLUMN IF NOT EXISTS min_topup NUMERIC(12,2) NOT NULL DEFAULT 200;
 
 -- Announcements
 CREATE TABLE IF NOT EXISTS announcements (
@@ -280,6 +315,14 @@ INSERT INTO business_types (name) VALUES
 ('Marketing Agency'), ('E-Commerce Brand'), ('Freelancer'), ('Startup'), ('Enterprise'), ('Other')
 ON CONFLICT DO NOTHING;
 
+-- Seed platform prices
+INSERT INTO platform_prices (id, price, fee, min_topup, active) VALUES
+('meta',     50, 6, 200, true),
+('google',   50, 6, 200, true),
+('tiktok',   50, 6, 200, true),
+('snapchat', 50, 6, 200, true)
+ON CONFLICT DO NOTHING;
+
 -- Seed announcements
 INSERT INTO announcements (icon, title, body, date) VALUES
 ('📢', 'New: TikTok Ads Accounts', 'TikTok accounts are now available!', 'May 20, 2024'),
@@ -306,6 +349,9 @@ ALTER TABLE payment_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE business_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE support_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform_prices ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all platform_prices" ON platform_prices FOR ALL USING (true) WITH CHECK (true);
 
 -- Public read access for inventory products, approved media buyers, payment methods, business types, announcements
 CREATE POLICY "Public read inventory products" ON inventory_products FOR SELECT USING (true);

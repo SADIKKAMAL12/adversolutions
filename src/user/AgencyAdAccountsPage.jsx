@@ -3,6 +3,25 @@ import { useState, useEffect } from 'react'
 import { useStore } from '../shared/store.js'
 import { useNavigate } from '../shared/Router.jsx'
 import { PageShell, Card, Btn, PlatformIcon, Badge, DataTable, StepHeader, Input, Select } from '../shared/UI.jsx'
+import { createAdAccountRequest, updateUser } from '../lib/db.js'
+
+const DEFAULT_PRICES = { price: 50, fee: 6, minTopup: 200, active: true };
+
+function getPlatformPrice(platformId, platformPrices) {
+  const entry = (platformPrices || {})[platformId];
+  return {
+    price:    entry?.price    ?? DEFAULT_PRICES.price,
+    fee:      entry?.fee      ?? DEFAULT_PRICES.fee,
+    minTopup: entry?.minTopup ?? DEFAULT_PRICES.minTopup,
+  };
+}
+
+function getActivePlatforms(platformPrices) {
+  return PLATFORMS.filter(p => {
+    const entry = (platformPrices || {})[p.id];
+    return entry === undefined ? true : entry.active !== false;
+  });
+}
 
 const WIZARD_STEPS = [
   { label: "Choose Platform",    sub: "Select ad platform" },
@@ -12,14 +31,14 @@ const WIZARD_STEPS = [
   { label: "Confirmation",       sub: "Track your request" },
 ];
 
-function WizardStep1({ data, set, onNext }) {
+function WizardStep1({ data, set, onNext, platformPrices }) {
   return (
     <div style={{ maxWidth: 700, margin: "0 auto" }}>
       <Card>
         <h2 style={{ margin: "0 0 6px", fontSize: 19, fontWeight: 900, color: C.g800 }}>Choose Your Platform</h2>
         <p style={{ margin: "0 0 26px", fontSize: 14, color: C.g500 }}>Select the advertising platform for which you want an agency ad account.</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 30 }}>
-          {PLATFORMS.map(p => {
+          {getActivePlatforms(platformPrices).map(p => {
             const sel = data.platform === p.id;
             return (
               <div key={p.id} onClick={() => set("platform", p.id)}
@@ -133,61 +152,97 @@ function WizardStep3({ data, set, onNext, onBack, businessTypes }) {
   );
 }
 
-function WizardStep4({ data, onNext, onBack, balance, paymentMethods }) {
-  const [payWithBalance, setPay] = useState(true);
+function WizardStep4({ data, set, onNext, onBack, balance, platformPrices }) {
   const platform = PLATFORMS.find(p => p.id === data.platform);
-  const price = 50, fee = 2, total = price + fee;
-  const canPay = balance >= total;
+  const { price, fee, minTopup } = getPlatformPrice(data.platform, platformPrices);
+  const topup = parseFloat(data.topupAmount) || 0;
+  const feeAmount = +(topup * fee / 100).toFixed(2);
+  const total = +(price + topup + feeAmount).toFixed(2);
+  const topupValid = topup >= minTopup;
+  const canPay = balance >= total && topupValid;
+
+  const row = (label, value, last = false) => (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: last ? "none" : `1px solid ${C.g200}`, fontSize: 13 }}>
+      <span style={{ color: C.g500 }}>{label}</span>
+      <span style={{ fontWeight: 700, color: C.g700, textAlign: "right", maxWidth: 180 }}>{value}</span>
+    </div>
+  );
 
   return (
-    <div style={{ maxWidth: 700, margin: "0 auto" }}>
+    <div style={{ maxWidth: 740, margin: "0 auto" }}>
       <Card>
         <h2 style={{ margin: "0 0 6px", fontSize: 19, fontWeight: 900, color: C.g800 }}>Review & Payment</h2>
-        <p style={{ margin: "0 0 26px", fontSize: 14, color: C.g500 }}>Review your order details and complete the payment.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 28 }}>
+        <p style={{ margin: "0 0 26px", fontSize: 14, color: C.g500 }}>Enter your desired top-up amount and confirm the order.</p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+          {/* Order Summary */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 800, color: C.g500, letterSpacing: .8, textTransform: "uppercase", marginBottom: 12 }}>Order Summary</div>
             <div style={{ background: C.g50, borderRadius: 12, padding: "16px 18px" }}>
-              {[
-                ["Platform", <div style={{ display: "flex", alignItems: "center", gap: 6 }}><PlatformIcon name={(platform && platform.icon) || data.platform} size={14} />{(platform && platform.name) || data.platform}</div>],
-                ["Account Name", data.accountName || "—"],
-                ["Timezone", data.timezone],
-                ["Currency", data.currency],
-                ["Business Type", data.businessType || "—"],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.g200}`, fontSize: 13 }}>
-                  <span style={{ color: C.g500 }}>{k}</span>
-                  <span style={{ fontWeight: 700, color: C.g700, textAlign: "right", maxWidth: 180 }}>{v}</span>
-                </div>
-              ))}
+              {row("Platform", <div style={{ display: "flex", alignItems: "center", gap: 6 }}><PlatformIcon name={platform?.icon || data.platform} size={14} />{platform?.name || data.platform}</div>)}
+              {row("Account Name", data.accountName || "—")}
+              {row("Timezone", data.timezone)}
+              {row("Currency", data.currency)}
+              {row("Business Type", data.businessType || "—", true)}
             </div>
           </div>
+
+          {/* Pricing */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 800, color: C.g500, letterSpacing: .8, textTransform: "uppercase", marginBottom: 12 }}>Pricing</div>
-            <div style={{ background: C.g50, borderRadius: 12, padding: "16px 18px", marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.g200}`, fontSize: 13 }}><span style={{ color: C.g500 }}>Service Price</span><span style={{ fontWeight: 700 }}>${price}.00</span></div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.g200}`, fontSize: 13 }}><span style={{ color: C.g500 }}>Processing Fee</span><span style={{ fontWeight: 700 }}>${fee}.00</span></div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0 4px", fontSize: 16 }}>
+
+            {/* Top-up amount input */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.g700, marginBottom: 7 }}>
+                Top-up Amount <span style={{ color: C.primary }}>*</span>
+                <span style={{ fontWeight: 400, color: C.g400, marginLeft: 8 }}>min ${minTopup.toLocaleString()}</span>
+              </label>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: C.g500, fontSize: 15, fontWeight: 700 }}>$</span>
+                <input
+                  type="number"
+                  min={minTopup}
+                  value={data.topupAmount}
+                  onChange={e => set("topupAmount", e.target.value)}
+                  placeholder={String(minTopup)}
+                  style={{ width: "100%", border: `2px solid ${!data.topupAmount ? C.g200 : topupValid ? C.green : C.red}`, borderRadius: 10, padding: "11px 14px 11px 30px", fontSize: 15, fontWeight: 700, fontFamily: "inherit", outline: "none", boxSizing: "border-box", color: C.g800 }}
+                />
+              </div>
+              {data.topupAmount && !topupValid && (
+                <div style={{ fontSize: 12, color: C.red, fontWeight: 600, marginTop: 5 }}>Minimum top-up is ${minTopup.toLocaleString()}</div>
+              )}
+            </div>
+
+            {/* Breakdown */}
+            <div style={{ background: C.g50, borderRadius: 12, padding: "14px 16px", marginBottom: 14 }}>
+              {row("Service Price", `$${price.toFixed(2)}`)}
+              {row("Top-up Amount", topup > 0 ? `$${topup.toFixed(2)}` : "—")}
+              {row(`Fee (${fee}% on top-up)`, topup > 0 ? `$${feeAmount.toFixed(2)}` : "—")}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 2px", fontSize: 16 }}>
                 <span style={{ fontWeight: 900, color: C.g800 }}>Total</span>
-                <span style={{ fontWeight: 900, color: C.primary }}>${total}.00</span>
+                <span style={{ fontWeight: 900, color: C.primary }}>${topup > 0 ? total.toFixed(2) : "—"}</span>
               </div>
             </div>
-            <div style={{ background: canPay ? C.greenL : C.redL, border: `1px solid ${canPay ? C.green : C.red}30`, borderRadius: 12, padding: "14px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 14, color: C.g700 }}>Pay with Balance</span>
-                <div onClick={() => setPay(p => !p)}
-                  style={{ width: 44, height: 24, borderRadius: 12, background: payWithBalance ? C.primary : C.g300, cursor: "pointer", position: "relative", transition: "all .2s" }}>
-                  <div style={{ width: 20, height: 20, background: "#fff", borderRadius: "50%", position: "absolute", top: 2, left: payWithBalance ? 22 : 2, transition: "all .2s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
-                </div>
-              </div>
-              <div style={{ fontSize: 13, color: C.g600 }}>Available: <strong>${balance.toFixed(2)}</strong>{!canPay && <span style={{ color: C.red, fontWeight: 700 }}> — Insufficient balance</span>}</div>
+
+            {/* Balance */}
+            <div style={{ background: (canPay || !data.topupAmount) ? C.greenL : C.redL, border: `1px solid ${(canPay || !data.topupAmount) ? C.green : C.red}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: C.g600 }}>
+              Your balance: <strong>${balance.toFixed(2)}</strong>
+              {data.topupAmount && !canPay && balance < total && (
+                <span style={{ color: C.red, fontWeight: 700 }}> — Insufficient balance</span>
+              )}
+              {data.topupAmount && canPay && (
+                <span style={{ color: C.green, fontWeight: 700 }}> — After payment: ${(balance - total).toFixed(2)}</span>
+              )}
             </div>
           </div>
         </div>
+
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <Btn variant="outline" size="lg" onClick={onBack}>← Back</Btn>
-          <Btn size="lg" style={{ minWidth: 180, background: canPay ? C.primary : C.g300, cursor: canPay ? "pointer" : "default" }} onClick={() => canPay && onNext()}>
-            {canPay ? `Pay $${total}.00 →` : "Insufficient Balance"}
+          <Btn size="lg"
+            style={{ minWidth: 200, background: canPay ? C.primary : C.g300, cursor: canPay ? "pointer" : "default" }}
+            onClick={() => canPay && onNext()}>
+            {!data.topupAmount ? "Enter top-up amount" : !topupValid ? `Min top-up $${minTopup}` : balance < total ? "Insufficient Balance" : `Pay $${total.toFixed(2)} →`}
           </Btn>
         </div>
       </Card>
@@ -195,8 +250,13 @@ function WizardStep4({ data, onNext, onBack, balance, paymentMethods }) {
   );
 }
 
-function WizardStep5({ data, onDone }) {
+function WizardStep5({ data, onDone, platformPrices }) {
   const platform = PLATFORMS.find(p => p.id === data.platform);
+  const { price, fee } = getPlatformPrice(data.platform, platformPrices);
+  const topup = parseFloat(data.topupAmount) || 0;
+  const feeAmount = +(topup * fee / 100).toFixed(2);
+  const total = +(price + topup + feeAmount).toFixed(2);
+
   return (
     <div style={{ maxWidth: 700, margin: "0 auto" }}>
       <Card>
@@ -207,7 +267,17 @@ function WizardStep5({ data, onDone }) {
             Your agency ad account request has been received. We'll review it and notify you once it's ready.
           </p>
           <div style={{ background: C.g50, borderRadius: 14, padding: "20px 24px", textAlign: "left", marginBottom: 28 }}>
-            {[["Request ID", data.requestId], ["Platform", (platform && platform.name) || data.platform], ["Account Name", data.accountName], ["Business", data.businessName || data.businessType], ["Date", new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })], ["Status", <Badge status="pending" />]].map(([k, v]) => (
+            {[
+              ["Request ID", data.requestId],
+              ["Platform", platform?.name || data.platform],
+              ["Account Name", data.accountName],
+              ["Business", data.businessName || data.businessType],
+              ["Top-up Amount", `$${topup.toFixed(2)}`],
+              [`Fee (${fee}%)`, `$${feeAmount.toFixed(2)}`],
+              ["Total Paid", <span style={{ color: C.primary, fontWeight: 900 }}>${total.toFixed(2)}</span>],
+              ["Date", new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })],
+              ["Status", <Badge status="pending" />],
+            ].map(([k, v]) => (
               <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.g200}`, fontSize: 14 }}>
                 <span style={{ color: C.g500, fontWeight: 600 }}>{k}</span>
                 <span style={{ fontWeight: 700, color: C.g700 }}>{v}</span>
@@ -224,24 +294,69 @@ function WizardStep5({ data, onDone }) {
   );
 }
 
-function CreateAdAccountWizard({ onCancel, balance, setStore, businessTypes }) {
+function CreateAdAccountWizard({ onCancel, balance, setStore, businessTypes, auth, platformPrices }) {
   const [step, setStep] = useState(1);
   const [data, setData] = useState({
     platform: "", accountName: "", timezone: "(GMT+00:00) UTC", currency: "USD – US Dollar",
     websites: [""], pageLinks: [""],
     bmId: "", businessName: "", businessType: "", country: "", email: "", phone: "",
-    requestId: "",
+    requestId: "", topupAmount: "",
   });
   const set = (k, v) => setData(p => ({ ...p, [k]: v }));
   const next = () => setStep(s => s + 1);
   const back = () => setStep(s => s - 1);
-  const done = () => {
-    const req = { ...data, id: Date.now(), status: "pending", submittedAt: new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) };
+  const done = async () => {
+    const { price, fee } = getPlatformPrice(data.platform, platformPrices);
+    const topup = parseFloat(data.topupAmount) || 0;
+    const feeAmount = +(topup * fee / 100).toFixed(2);
+    const total = +(price + topup + feeAmount).toFixed(2);
+    const now = new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const dbId = String(Date.now());
+    const reqId = data.requestId || ("#AAR-" + dbId);
+
+    const dbRecord = {
+      id: dbId,
+      user_id: auth?.id || null,
+      user_email: auth?.email || null,
+      platform: data.platform,
+      account_name: data.accountName,
+      timezone: data.timezone,
+      currency: data.currency,
+      websites: data.websites,
+      page_links: data.pageLinks,
+      bm_id: data.bmId || null,
+      business_name: data.businessName || null,
+      business_type: data.businessType,
+      business_email: data.email || null,
+      country: data.country || null,
+      phone: data.phone || null,
+      status: "pending",
+      amount: total,
+      request_id: reqId,
+      submitted_at: now,
+    };
+
+    try {
+      await createAdAccountRequest(dbRecord);
+    } catch (err) {
+      console.warn("Failed to save request to DB:", err.message);
+    }
+
+    if (auth?.id) {
+      const newBalance = (parseFloat(auth.balance) || 0) - total;
+      try {
+        await updateUser(auth.id, { balance: newBalance });
+      } catch (err) {
+        console.warn("Failed to update balance in DB:", err.message);
+      }
+    }
+
+    const req = { ...dbRecord, accountName: data.accountName, pageLinks: data.pageLinks, bmId: data.bmId, businessName: data.businessName, businessType: data.businessType, email: data.email, requestId: reqId, submittedAt: now };
     setStore(s => ({
       ...s,
       adAccountRequests: [req, ...s.adAccountRequests],
-      balance: s.balance - 52,
-      transactions: [{ id: Date.now(), type: "Spent", method: "Agency Ad Account", amount: -52, status: "completed", date: new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) }, ...s.transactions]
+      balance: s.balance - total,
+      transactions: [{ id: Date.now(), type: "Spent", method: "Agency Ad Account", amount: -total, status: "completed", date: now }, ...s.transactions]
     }));
     onCancel();
   };
@@ -260,21 +375,21 @@ function CreateAdAccountWizard({ onCancel, balance, setStore, businessTypes }) {
       actions={step < 5 ? [<Btn key="cancel" variant="outline" onClick={onCancel}>✕ Cancel</Btn>] : undefined}
     >
       <StepHeader steps={WIZARD_STEPS} current={step} />
-      {step === 1 && <WizardStep1 data={data} set={set} onNext={next} />}
+      {step === 1 && <WizardStep1 data={data} set={set} onNext={next} platformPrices={platformPrices} />}
       {step === 2 && <WizardStep2 data={data} set={set} onNext={next} onBack={back} />}
       {step === 3 && <WizardStep3 data={data} set={set} onNext={next} onBack={back} businessTypes={businessTypes} />}
-      {step === 4 && <WizardStep4 data={data} onNext={next} onBack={back} balance={balance} />}
-      {step === 5 && <WizardStep5 data={data} onDone={done} />}
+      {step === 4 && <WizardStep4 data={data} set={set} onNext={next} onBack={back} balance={balance} platformPrices={platformPrices} />}
+      {step === 5 && <WizardStep5 data={data} onDone={done} platformPrices={platformPrices} />}
     </PageShell>
   );
 }
 
-export default function AgencyAdAccountsPage({ balance, requests, setStore }) {
+export default function AgencyAdAccountsPage({ balance, requests, setStore, platformPrices }) {
   const [store] = useStore();
   const [view, setView] = useState("list");
   const navigate = useNavigate();
 
-  if (view === "create") return <CreateAdAccountWizard onCancel={() => setView("list")} balance={balance} setStore={setStore} businessTypes={store.businessTypes} />;
+  if (view === "create") return <CreateAdAccountWizard onCancel={() => setView("list")} balance={balance} setStore={setStore} businessTypes={store.businessTypes} auth={store.auth} platformPrices={platformPrices} />;
 
   const cols = [
     { label: "", render: () => <input type="checkbox" />, style: { width: 40 } },

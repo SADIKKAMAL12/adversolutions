@@ -51,6 +51,7 @@ export const Badge = ({ status }) => {
     pending:        { bg: C.yellowL,  c: "#d97706" },
     "pending review":{ bg: C.yellowL, c: "#d97706" },
     processing:     { bg: C.blueL,    c: C.blue   },
+    in_review:      { bg: C.blueL,    c: C.blue   },
     sold:           { bg: C.blueL,    c: C.blue   },
     disabled:       { bg: C.redL,     c: C.red    },
     rejected:       { bg: C.redL,     c: C.red    },
@@ -67,15 +68,17 @@ export const Badge = ({ status }) => {
 };
 
 export const Btn = ({ children, variant = "primary", size = "md", full, style: st, ...props }) => {
+  const { theme } = useTheme();
+  const TC = getThemeColors(theme === 'dark');
   const sz = { sm: { padding: "7px 14px", fontSize: 12 }, md: { padding: "10px 22px", fontSize: 13 }, lg: { padding: "13px 28px", fontSize: 15 } }[size];
   const v = {
-    primary: { background: C.primary,  color: "#fff",   border: "none"                            },
-    outline: { background: "#fff",     color: C.g700,   border: `1.5px solid ${C.g200}`           },
-    ghost:   { background: "transparent", color: C.g500, border: "none"                            },
-    dark:    { background: C.g800,     color: "#fff",   border: "none"                            },
-    success: { background: C.green,    color: "#fff",   border: "none"                            },
-    danger:  { background: C.red,      color: "#fff",   border: "none"                            },
-    warning: { background: C.yellow,   color: "#fff",   border: "none"                            },
+    primary: { background: C.primary,     color: "#fff",   border: "none"                               },
+    outline: { background: TC.card,        color: TC.g700,  border: `1.5px solid ${TC.g200}`             },
+    ghost:   { background: "transparent",  color: TC.g500,  border: "none"                               },
+    dark:    { background: TC.g800,        color: "#fff",   border: "none"                               },
+    success: { background: C.green,        color: "#fff",   border: "none"                               },
+    danger:  { background: C.red,          color: "#fff",   border: "none"                               },
+    warning: { background: C.yellow,       color: "#fff",   border: "none"                               },
   }[variant];
   return (
     <button style={{ ...sz, ...v, borderRadius: 10, cursor: "pointer", fontWeight: 700, fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "opacity .15s", width: full ? "100%" : undefined, ...st }}
@@ -95,14 +98,18 @@ export const Card = ({ children, style, onClick }) => {
   );
 };
 
-export const StatCard = ({ icon, label, value, sub, color, subPositive = true }) => (
-  <Card>
-    <div style={{ width: 42, height: 42, background: color + "20", borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginBottom: 12 }}>{icon}</div>
-    <div style={{ fontSize: 12, color: C.g400, marginBottom: 4 }}>{label}</div>
-    <div style={{ fontSize: 24, fontWeight: 900, color: C.g800 }}>{value}</div>
-    {sub && <div style={{ fontSize: 12, color: subPositive ? C.green : C.red, marginTop: 4 }}>{subPositive ? "↑" : "↓"} {sub}</div>}
-  </Card>
-);
+export const StatCard = ({ icon, label, value, sub, color, subPositive = true }) => {
+  const { theme } = useTheme();
+  const TC = getThemeColors(theme === 'dark');
+  return (
+    <Card>
+      <div style={{ width: 42, height: 42, background: color + "20", borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 12, color: TC.g400, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 900, color: TC.g800 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: subPositive ? C.green : C.red, marginTop: 4 }}>{subPositive ? "↑" : "↓"} {sub}</div>}
+    </Card>
+  );
+};
 
 export const Input = ({ label, required, hint, ...props }) => {
   const { theme } = useTheme();

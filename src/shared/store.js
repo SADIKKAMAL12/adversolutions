@@ -3,7 +3,7 @@ import {
   fetchUsers, fetchTransactions, fetchInventoryProducts, fetchInventoryLines,
   fetchOrders, fetchDeposits, fetchMediaBuyers, fetchPaymentMethods,
   fetchBusinessTypes, fetchTickets, fetchAdAccountRequests, fetchPurchases,
-  fetchProjects, fetchAnnouncements
+  fetchProjects, fetchAnnouncements, fetchPlatformPrices
 } from '../lib/db.js'
 
 
@@ -166,10 +166,11 @@ export async function hydrateStore() {
   if (_hydrated) return;
 
   try {
+    // First batch — everything except purchases (which needs user_id filter)
     const [
       users, transactions, inventoryProducts, inventoryLines, orders,
       deposits, mediaBuyers, paymentMethods, businessTypes, supportTickets,
-      adAccountRequests, purchases, projects, announcements
+      adAccountRequests, projects, announcements, platformPrices
     ] = await Promise.all([
       fetchUsers(),
       fetchTransactions(),
@@ -182,9 +183,9 @@ export async function hydrateStore() {
       fetchBusinessTypes(),
       fetchTickets(),
       fetchAdAccountRequests(),
-      fetchPurchases(),
       fetchProjects(),
       fetchAnnouncements(),
+      fetchPlatformPrices(),
     ]);
 
     const session = getSession();
@@ -198,6 +199,11 @@ export async function hydrateStore() {
         balance = parseFloat(me.balance) || 0;
       }
     }
+
+    // Second: fetch purchases filtered by user (admin gets all)
+    const purchases = await fetchPurchases(
+      auth && auth.role !== 'admin' ? auth.id : null
+    );
 
     _store = {
       auth,
@@ -221,6 +227,7 @@ export async function hydrateStore() {
       businessTypes: businessTypes || DEMO_STORE.businessTypes,
       supportTickets: supportTickets || [],
       announcements: announcements || DEMO_STORE.announcements,
+      platformPrices: platformPrices || {},
     };
 
     _hydrated = true;

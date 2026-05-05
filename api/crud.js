@@ -4,7 +4,7 @@ const ALLOWED_TABLES = [
   'users', 'transactions', 'ad_account_requests', 'inventory_products',
   'inventory_lines', 'purchases', 'projects', 'orders', 'deposits',
   'media_buyers', 'payment_methods', 'business_types', 'support_tickets',
-  'announcements', 'settings'
+  'announcements', 'settings', 'platform_prices'
 ]
 
 function isAllowed(table) {

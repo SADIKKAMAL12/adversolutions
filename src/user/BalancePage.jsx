@@ -1,8 +1,57 @@
 import { C } from '../shared/theme.js'
-import { useState } from 'react'
-import { PageShell, Card, Btn, Badge, DataTable } from '../shared/UI.jsx'
+import { useState, useRef } from 'react'
+import { PageShell, Card, Btn, Badge, DataTable, Modal } from '../shared/UI.jsx'
 import { useAuth } from '../shared/AuthContext.jsx'
 import { createDeposit, createTransaction } from '../lib/db.js'
+
+function PaymentInfoModal({ method, onClose }) {
+  const [copied, setCopied] = useState(null);
+  const copy = (text, key) => {
+    navigator.clipboard?.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1800);
+  };
+  return (
+    <Modal title="Payment Details" onClose={onClose} width={440}>
+      {/* Logo + name */}
+      <div style={{ textAlign: "center", marginBottom: 24 }}>
+        <div style={{ width: 72, height: 72, borderRadius: 18, background: C.g50, border: `1px solid ${C.g200}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", overflow: "hidden" }}>
+          {method.logo && method.logo.startsWith('data:') ? (
+            <img src={method.logo} alt="" style={{ width: 60, height: 60, objectFit: "contain" }} />
+          ) : (
+            <span style={{ fontSize: 40 }}>{method.logo || "💳"}</span>
+          )}
+        </div>
+        <div style={{ fontWeight: 900, fontSize: 18, color: C.g800 }}>{method.name}</div>
+        {method.bank_name && <div style={{ fontSize: 13, color: C.g500, marginTop: 3 }}>{method.bank_name}</div>}
+      </div>
+
+      {/* Fields */}
+      {(method.fields || []).length === 0 ? (
+        <div style={{ textAlign: "center", padding: "20px 0", color: C.g400, fontSize: 13 }}>No payment details available.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {(method.fields || []).map((f, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${C.g100}` }}>
+              <span style={{ fontSize: 12, color: C.g500, fontWeight: 700, minWidth: 90 }}>{f.label}</span>
+              <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 800, color: C.g800, flex: 1, wordBreak: "break-all" }}>{f.value}</span>
+              <button
+                onClick={() => copy(f.value, i)}
+                style={{ background: copied === i ? C.greenL : C.primaryLight, border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", color: copied === i ? C.green : C.primary, flexShrink: 0, transition: "all .15s" }}
+              >
+                {copied === i ? "✓" : "Copy"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: 20, background: C.yellowL, border: `1px solid ${C.yellow}30`, borderRadius: 10, padding: "12px 14px", fontSize: 12, color: "#78350f", lineHeight: 1.6 }}>
+        ⚠️ Send the exact amount to the details above, then upload your payment proof in the next step.
+      </div>
+    </Modal>
+  );
+}
 
 export default function BalancePage({ balance, transactions, paymentMethods, addTransaction, addBalance, setStore }) {
   const { user } = useAuth();
@@ -10,22 +59,42 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
   const firstMethod = paymentMethods[0];
   const [method, setMethod] = useState((firstMethod && firstMethod.name) || "Payoneer");
   const [amount, setAmount] = useState("350.00");
-  const [proof, setProof] = useState(false);
   const [txFilter, setTxFilter] = useState("all");
   const [successBanner, setSuccessBanner] = useState(false);
-  const activeMethods = paymentMethods.filter(m => m.active);
+  const [showMethod, setShowMethod] = useState(null);
 
+  // File upload state
+  const fileInputRef = useRef(null);
+  const [proofFile, setProofFile] = useState(null);
+  const [proofDataUrl, setProofDataUrl] = useState(null);
+  const [uploadError, setUploadError] = useState("");
+
+  const activeMethods = paymentMethods.filter(m => m.active);
   const filtered = txFilter === "all" ? transactions : transactions.filter(t => t.type.toLowerCase().includes(txFilter) || t.status === txFilter);
+  const selectedMethod = activeMethods.find(m => m.name === method);
+
+  const handleFileChange = (e) => {
+    setUploadError("");
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      setUploadError("File too large. Please use an image under 3MB.");
+      return;
+    }
+    setProofFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setProofDataUrl(ev.target.result);
+    reader.readAsDataURL(file);
+  };
 
   const submitDeposit = async () => {
-    if (!proof) { alert("Please upload payment proof."); return; }
+    if (!proofFile) { setUploadError("Please upload payment proof before submitting."); return; }
     if (!user) { alert("Please log in."); return; }
 
     const dateStr = new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
     const depositId = "DEP-" + Date.now();
 
     try {
-      // Write to Supabase
       await createDeposit({
         id: depositId,
         user_id: user.id,
@@ -33,7 +102,7 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
         amount: parseFloat(amount) || 0,
         status: "pending",
         date: dateStr,
-        proof: "proof_upload.png",
+        proof: proofDataUrl || proofFile.name,
       });
 
       await createTransaction({
@@ -45,7 +114,6 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
         date: dateStr,
       });
 
-      // Update local state
       setStore(s => ({
         ...s,
         transactions: [{
@@ -62,13 +130,15 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
           amount: parseFloat(amount) || 0,
           status: "pending",
           date: dateStr,
-          proof: "proof_upload.png",
+          proof: proofDataUrl || proofFile.name,
         }, ...s.deposits],
       }));
 
       setSuccessBanner(true);
       setPayStep(1);
-      setProof(false);
+      setProofFile(null);
+      setProofDataUrl(null);
+      setUploadError("");
       setAmount("350.00");
     } catch (err) {
       alert("Failed to submit deposit: " + err.message);
@@ -82,14 +152,12 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
     { label: "Amount", render: r => <span style={{ fontWeight: 900, color: r.amount < 0 ? C.red : C.green }}>{r.amount < 0 ? "−" : "+"} ${Math.abs(r.amount).toFixed(2)}</span> },
     { label: "Status", render: r => <Badge status={r.status} /> },
     { label: "Date", render: r => <span style={{ fontSize: 12, color: C.g400 }}>{r.date}</span> },
-    { label: "", render: () => <span style={{ cursor: "pointer" }}>👁</span> },
   ];
-
-  const selectedMethod = activeMethods.find(m => m.name === method);
-  const selectedAccount = selectedMethod && selectedMethod.account;
 
   return (
     <PageShell title="Balance & Transactions" subtitle="Manage your account balance, top up, and view your full transaction history.">
+      {showMethod && <PaymentInfoModal method={showMethod} onClose={() => setShowMethod(null)} />}
+
       {successBanner && (
         <div style={{ background: C.greenL, border: `1px solid ${C.green}40`, borderRadius: 13, padding: "14px 20px", marginBottom: 22, display: "flex", gap: 12, alignItems: "center" }}>
           <span style={{ fontSize: 22 }}>✅</span>
@@ -116,6 +184,8 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
           <Card style={{ marginBottom: 20 }}>
             <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 900, color: C.g800 }}>Top Up Balance</h3>
             <p style={{ margin: "0 0 24px", fontSize: 13, color: C.g500 }}>Add funds to your account balance.</p>
+
+            {/* Step indicator */}
             <div style={{ display: "flex", alignItems: "center", marginBottom: 28 }}>
               {[{ n: 1, l: "Payment Method" }, { n: 2, l: "Payment Details" }, { n: 3, l: "Upload Proof" }].map((s, i) => (
                 <div key={s.n} style={{ display: "flex", alignItems: "center", flex: i < 2 ? 1 : "auto" }}>
@@ -128,6 +198,7 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
               ))}
             </div>
 
+            {/* Step 1 — choose method */}
             {payStep === 1 && (
               <>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 22 }}>
@@ -147,26 +218,33 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
               </>
             )}
 
+            {/* Step 2 — payment details + amount */}
             {payStep === 2 && (
               <>
-                {/* Admin-configured payment details */}
                 <div style={{ background: C.g50, borderRadius: 11, padding: "16px 18px", marginBottom: 18, border: `1px solid ${C.g200}` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                    {selectedMethod?.logo && selectedMethod.logo.startsWith('data:') ? (
-                      <img src={selectedMethod.logo} alt="" style={{ width: 28, height: 28, objectFit: "contain" }} />
-                    ) : (
-                      <span style={{ fontSize: 24 }}>{selectedMethod?.logo || "💳"}</span>
-                    )}
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 14, color: C.g800 }}>{selectedMethod?.name}</div>
-                      <div style={{ fontSize: 12, color: C.g400 }}>{selectedMethod?.bank_name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "#fff", border: `1px solid ${C.g200}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {selectedMethod?.logo && selectedMethod.logo.startsWith('data:') ? (
+                        <img src={selectedMethod.logo} alt="" style={{ width: 32, height: 32, objectFit: "contain" }} />
+                      ) : (
+                        <span style={{ fontSize: 24 }}>{selectedMethod?.logo || "💳"}</span>
+                      )}
                     </div>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: C.g800 }}>{selectedMethod?.name}</div>
+                      {selectedMethod?.bank_name && <div style={{ fontSize: 12, color: C.g400 }}>{selectedMethod.bank_name}</div>}
+                    </div>
+                    <button
+                      onClick={() => setShowMethod(selectedMethod)}
+                      style={{ marginLeft: "auto", background: C.primaryLight, color: C.primary, border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Show Details
+                    </button>
                   </div>
                   {(selectedMethod?.fields || []).map((f, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i === 0 ? `1px solid ${C.g200}` : "none", borderBottom: `1px solid ${C.g100}` }}>
-                      <span style={{ fontSize: 12, color: C.g500, fontWeight: 600, minWidth: 100 }}>{f.label}</span>
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${C.g200}` }}>
+                      <span style={{ fontSize: 12, color: C.g500, fontWeight: 600, minWidth: 90 }}>{f.label}</span>
                       <span style={{ fontSize: 13, color: C.g800, fontWeight: 700, flex: 1, fontFamily: "monospace" }}>{f.value}</span>
-                      <button onClick={() => navigator.clipboard && navigator.clipboard.writeText(f.value)} style={{ background: C.g100, border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", color: C.g500, fontWeight: 600 }}>Copy</button>
                     </div>
                   ))}
                 </div>
@@ -192,21 +270,54 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
               </>
             )}
 
+            {/* Step 3 — upload proof */}
             {payStep === 3 && (
               <>
                 <div style={{ background: C.yellowL, border: `1px solid ${C.yellow}40`, borderRadius: 10, padding: "12px 16px", marginBottom: 18, fontSize: 13, color: "#92400e" }}>
-                  ⚠️ Send <strong>${parseFloat(amount || 0).toFixed(2)} USD</strong> via <strong>{selectedMethod?.name || method}</strong> ({selectedMethod?.bank_name}). Use the account details shown in step 2, then upload your payment screenshot below.
+                  ⚠️ Send <strong>${parseFloat(amount || 0).toFixed(2)} USD</strong> via <strong>{selectedMethod?.name || method}</strong>{selectedMethod?.bank_name ? ` (${selectedMethod.bank_name})` : ""}. Use the account details from step 2, then upload your payment screenshot below.
                 </div>
-                <div onClick={() => setProof(p => !p)}
-                  style={{ border: `2px dashed ${proof ? C.green : C.g300}`, borderRadius: 13, padding: "38px", textAlign: "center", cursor: "pointer", background: proof ? C.greenL : C.g50, marginBottom: 18, transition: "all .2s" }}>
-                  {proof
-                    ? <><div style={{ fontSize: 36, marginBottom: 8 }}>✅</div><div style={{ fontWeight: 700, color: C.green }}>proof_payment.png uploaded</div><div style={{ fontSize: 12, color: "#065f46" }}>Click to replace</div></>
-                    : <><div style={{ fontSize: 36, marginBottom: 8, color: C.g400 }}>↑</div><div style={{ fontWeight: 700, color: C.g500 }}>Click to Upload Payment Proof</div><div style={{ fontSize: 12, color: C.g400, marginTop: 4 }}>PNG, JPG, PDF up to 5MB</div></>
-                  }
+
+                {/* Hidden real file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                  onChange={handleFileChange}
+                  style={{ display: "none" }}
+                />
+
+                {/* Clickable upload zone */}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ border: `2px dashed ${proofFile ? C.green : C.g300}`, borderRadius: 13, padding: "38px 20px", textAlign: "center", cursor: "pointer", background: proofFile ? C.greenL : C.g50, marginBottom: 10, transition: "all .2s" }}
+                >
+                  {proofFile ? (
+                    <>
+                      {proofDataUrl && proofDataUrl.startsWith('data:image') && (
+                        <img src={proofDataUrl} alt="proof" style={{ maxHeight: 120, maxWidth: "100%", borderRadius: 8, marginBottom: 10, objectFit: "contain" }} />
+                      )}
+                      <div style={{ fontSize: 28, marginBottom: 6 }}>✅</div>
+                      <div style={{ fontWeight: 700, color: C.green }}>{proofFile.name}</div>
+                      <div style={{ fontSize: 12, color: "#065f46", marginTop: 4 }}>{(proofFile.size / 1024).toFixed(0)} KB — click to replace</div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 36, marginBottom: 8, color: C.g400 }}>↑</div>
+                      <div style={{ fontWeight: 700, color: C.g500 }}>Click to Upload Payment Proof</div>
+                      <div style={{ fontSize: 12, color: C.g400, marginTop: 4 }}>PNG, JPG, PDF up to 3MB</div>
+                    </>
+                  )}
                 </div>
+
+                {uploadError && (
+                  <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 8, padding: "10px 14px", marginBottom: 10, fontSize: 13, color: "#991b1b" }}>{uploadError}</div>
+                )}
+
                 <div style={{ display: "flex", gap: 10 }}>
                   <Btn variant="outline" onClick={() => setPayStep(2)}>← Back</Btn>
-                  <Btn onClick={submitDeposit} style={{ background: proof ? C.primary : C.g300, cursor: proof ? "pointer" : "default" }}>Submit Deposit Request</Btn>
+                  <Btn onClick={submitDeposit} style={{ background: proofFile ? C.primary : C.g300, cursor: proofFile ? "pointer" : "default" }}>
+                    Submit Deposit Request
+                  </Btn>
                 </div>
               </>
             )}
@@ -228,34 +339,36 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
           </Card>
         </div>
 
+        {/* Right sidebar */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card>
             <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 900, color: C.g800 }}>Payment Methods</h3>
-            {activeMethods.map(m => (
-              <div key={m.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.g100}` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                  <div style={{ width: 32, height: 32, background: C.primaryLight, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {m.logo && m.logo.startsWith('data:') ? (
-                      <img src={m.logo} alt="" style={{ width: 24, height: 24, objectFit: "contain" }} />
-                    ) : (
-                      <span style={{ fontSize: 18 }}>{m.logo || "💳"}</span>
-                    )}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 12, color: C.g700 }}>{m.name}</div>
-                    <div style={{ fontSize: 11, color: C.g400 }}>{m.bank_name}</div>
-                  </div>
+            {activeMethods.length === 0 && (
+              <div style={{ fontSize: 13, color: C.g400, textAlign: "center", padding: "20px 0" }}>No payment methods available.</div>
+            )}
+            {activeMethods.map((m, idx) => (
+              <div key={m.id} style={{ padding: "12px 0", borderBottom: idx < activeMethods.length - 1 ? `1px solid ${C.g100}` : "none", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, background: C.primaryLight, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                  {m.logo && m.logo.startsWith('data:') ? (
+                    <img src={m.logo} alt="" style={{ width: 28, height: 28, objectFit: "contain" }} />
+                  ) : (
+                    <span style={{ fontSize: 20 }}>{m.logo || "💳"}</span>
+                  )}
                 </div>
-                {(m.fields || []).map((f, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0 3px 42px" }}>
-                    <span style={{ fontSize: 11, color: C.g500, minWidth: 70 }}>{f.label}:</span>
-                    <span style={{ fontSize: 11, color: C.g700, fontFamily: "monospace", flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{f.value}</span>
-                    <button onClick={() => navigator.clipboard && navigator.clipboard.writeText(f.value)} style={{ background: C.g100, border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", color: C.g500, flexShrink: 0 }}>Copy</button>
-                  </div>
-                ))}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: C.g700 }}>{m.name}</div>
+                  {m.bank_name && <div style={{ fontSize: 11, color: C.g400 }}>{m.bank_name}</div>}
+                </div>
+                <button
+                  onClick={() => setShowMethod(m)}
+                  style={{ background: C.primaryLight, color: C.primary, border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                >
+                  Show
+                </button>
               </div>
             ))}
           </Card>
+
           <div style={{ background: C.yellowL, border: `1px solid ${C.yellow}30`, borderRadius: 13, padding: 16 }}>
             <div style={{ display: "flex", gap: 9 }}>
               <span style={{ fontSize: 18 }}>⚠️</span>
@@ -265,6 +378,7 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
               </div>
             </div>
           </div>
+
           <Card>
             <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 900, color: C.g800 }}>Balance Summary</h3>
             {[["Total Deposits", "$5,850.00", C.green], ["Total Spent", "$4,610.00", C.red], ["Pending", "$320.00", C.yellow], ["Net Balance", `$${balance.toFixed(2)}`, C.primary]].map(([l, v, c]) => (

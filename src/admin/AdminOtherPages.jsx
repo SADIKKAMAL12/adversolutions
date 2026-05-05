@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { C, getThemeColors } from '../shared/theme.js';
+import { C, getThemeColors, PLATFORMS } from '../shared/theme.js';
 import { PageShell } from '../shared/UI.jsx';
 import { Card, PlatformIcon, Badge, Btn, Input, Select, DataTable, Modal, Pagination, Avatar } from '../shared/UI.jsx';
 import { useTheme } from '../shared/ThemeContext.jsx';
@@ -18,7 +18,10 @@ async function apiPost(table, body) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   });
   const text = await res.text();
-  try { return JSON.parse(text); } catch { console.error('Non-JSON:', text.slice(0,200)); return null; }
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error('Non-JSON response: ' + text.slice(0, 200)); }
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  return data;
 }
 
 async function apiPut(table, body) {
@@ -26,7 +29,10 @@ async function apiPut(table, body) {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   });
   const text = await res.text();
-  try { return JSON.parse(text); } catch { console.error('Non-JSON:', text.slice(0,200)); return null; }
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error('Non-JSON response: ' + text.slice(0, 200)); }
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  return data;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -446,7 +452,7 @@ export function AdminOrdersPage({ orders, setStore }) {
 
   const cols = [
     { label: "Order ID", render: r => <span style={{ fontWeight: 700, color: C.g700 }}>{r.id}</span> },
-    { label: "User", render: r => <span style={{ fontSize: 12, color: C.g500 }}>{r.user}</span> },
+    { label: "User", render: r => <span style={{ fontSize: 12, color: C.g500 }}>{r.user_email || r.user}</span> },
     { label: "Type", render: r => <span style={{ fontSize: 12 }}>{r.type}</span> },
     { label: "Platform", render: r => <span style={{ fontSize: 12 }}>{r.platform}</span> },
     { label: "Amount", render: r => <span style={{ fontWeight: 800, color: C.primary }}>${r.amount}.00</span> },
@@ -504,6 +510,7 @@ export function AdminDepositsPage({ deposits, setStore, addBalance }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [error, setError] = useState("");
+  const [proofModal, setProofModal] = useState(null);
 
   const filteredDeposits = deposits.filter(d => {
     const matchesSearch = !search || d.id?.toLowerCase().includes(search.toLowerCase()) || d.user?.toLowerCase().includes(search.toLowerCase());
@@ -571,11 +578,14 @@ export function AdminDepositsPage({ deposits, setStore, addBalance }) {
 
   const cols = [
     { label: "Deposit ID", render: r => <span style={{ fontWeight: 700, color: C.primary, fontSize: 12 }}>{r.id}</span> },
-    { label: "User", render: r => <span style={{ fontSize: 12, color: C.g500 }}>{r.user}</span> },
+    { label: "User", render: r => <span style={{ fontSize: 12, color: C.g500 }}>{r.user_email || r.user}</span> },
     { label: "Method", render: r => <span style={{ fontSize: 12 }}>{r.method}</span> },
     { label: "Amount", render: r => <span style={{ fontWeight: 900, color: C.green }}>${r.amount?.toFixed ? r.amount.toFixed(2) : r.amount}</span> },
     { label: "Status", render: r => <Badge status={r.status} /> },
-    { label: "Proof", render: r => <span style={{ fontSize: 12, color: C.blue, cursor: "pointer" }}>{r.proof}</span> },
+    { label: "Proof", render: r => r.proof && r.proof.startsWith('data:image')
+      ? <img src={r.proof} alt="proof" onClick={() => setProofModal(r.proof)} style={{ height: 36, borderRadius: 4, cursor: "pointer", objectFit: "cover", border: `1px solid ${C.g200}` }} />
+      : <span style={{ fontSize: 12, color: C.g400 }}>{r.proof || "—"}</span>
+    },
     { label: "Date", render: r => <span style={{ fontSize: 12, color: C.g400 }}>{r.date}</span> },
     { label: "Actions", render: r => r.status === "pending"
       ? <div style={{ display: "flex", gap: 8 }}>
@@ -621,6 +631,14 @@ export function AdminDepositsPage({ deposits, setStore, addBalance }) {
           <Pagination total={`${filteredDeposits.length} deposits`} showing={`1–${filteredDeposits.length}`} pages={["‹", 1, 2, "›"]} />
         </div>
       </Card>
+      {proofModal && (
+        <div onClick={() => setProofModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: "relative" }}>
+            <button onClick={() => setProofModal(null)} style={{ position: "absolute", top: -14, right: -14, width: 32, height: 32, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.3)", zIndex: 1 }}>✕</button>
+            <img src={proofModal} alt="Proof of payment" style={{ maxWidth: "88vw", maxHeight: "88vh", borderRadius: 12, objectFit: "contain", display: "block" }} />
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }
@@ -1016,5 +1034,301 @@ function PaymentMethodModal({ method, onSave, onClose, saving }) {
         </Btn>
       </div>
     </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   ADMIN AGENCY AD ACCOUNTS PAGE
+═══════════════════════════════════════════════════ */
+
+const DEFAULT_PLATFORM_PRICES = Object.fromEntries(
+  PLATFORMS.map(p => [p.id, { name: p.name, icon: p.icon, price: 50, fee: 6, minTopup: 200, active: true }])
+);
+
+export function AdminAgencyAdAccountsPage({ requests, users, setStore, platformPrices: propPrices }) {
+  const [tab, setTab] = useState("requests");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [savingId, setSavingId] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [viewRequest, setViewRequest] = useState(null);
+
+  const [platformPrices, setPlatformPrices] = useState(DEFAULT_PLATFORM_PRICES);
+  const [savingPrices, setSavingPrices] = useState(false);
+
+  useEffect(() => {
+    if (propPrices && Object.keys(propPrices).length > 0) {
+      setPlatformPrices(() => {
+        const merged = { ...DEFAULT_PLATFORM_PRICES };
+        for (const id of Object.keys(merged)) {
+          if (propPrices[id]) {
+            merged[id] = {
+              ...merged[id],
+              price:    propPrices[id].price    ?? merged[id].price,
+              fee:      propPrices[id].fee      ?? merged[id].fee,
+              minTopup: propPrices[id].minTopup ?? merged[id].minTopup,
+              active:   propPrices[id].active   ?? merged[id].active,
+            };
+          }
+        }
+        return merged;
+      });
+    }
+  }, [propPrices]);
+
+  const getUserEmail = (userId) => {
+    const u = (users || []).find(u => u.id === userId);
+    return u ? (u.email || u.name) : userId;
+  };
+
+  const filteredRequests = requests.filter(r => {
+    const matchStatus = statusFilter === "All" || r.status === statusFilter;
+    const matchSearch = !search ||
+      (r.account_name || r.accountName || "").toLowerCase().includes(search.toLowerCase()) ||
+      (r.platform || "").toLowerCase().includes(search.toLowerCase()) ||
+      getUserEmail(r.user_id).toLowerCase().includes(search.toLowerCase());
+    return matchStatus && matchSearch;
+  });
+
+  const updateStatus = async (id, newStatus) => {
+    setSavingId(id);
+    setError("");
+    try {
+      await apiPut('ad_account_requests', { id, status: newStatus });
+      setStore(s => ({
+        ...s,
+        adAccountRequests: s.adAccountRequests.map(r => r.id === id ? { ...r, status: newStatus } : r)
+      }));
+    } catch (err) {
+      setError('Failed to update: ' + err.message);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const savePrices = async () => {
+    setSavingPrices(true);
+    setError("");
+    try {
+      await Promise.all(
+        Object.entries(platformPrices).map(([id, ps]) =>
+          apiPut('platform_prices', { id, price: ps.price, fee: ps.fee, min_topup: ps.minTopup, active: ps.active })
+        )
+      );
+      setStore(s => ({ ...s, platformPrices: Object.fromEntries(
+        Object.entries(platformPrices).map(([id, ps]) => [id, { price: ps.price, fee: ps.fee, minTopup: ps.minTopup, active: ps.active }])
+      )}));
+      setSuccess("Platform settings saved!");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError("Failed to save: " + err.message);
+    } finally {
+      setSavingPrices(false);
+    }
+  };
+
+  const updatePrice = (id, field, value) => {
+    setPlatformPrices(p => ({ ...p, [id]: { ...p[id], [field]: value } }));
+  };
+
+  const STATUS_OPTIONS = ["pending", "in_review", "approved", "rejected"];
+
+  const statCounts = {
+    total: requests.length,
+    pending: requests.filter(r => r.status === "pending").length,
+    in_review: requests.filter(r => r.status === "in_review").length,
+    approved: requests.filter(r => r.status === "approved").length,
+    rejected: requests.filter(r => r.status === "rejected").length,
+  };
+
+  const cols = [
+    { label: "Account", render: r => (
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: C.g800 }}>{r.account_name || r.accountName || "—"}</div>
+        <div style={{ fontSize: 11, color: C.g400 }}>{r.requestId || r.id}</div>
+      </div>
+    )},
+    { label: "User", render: r => <span style={{ fontSize: 12, color: C.g500 }}>{getUserEmail(r.user_id)}</span> },
+    { label: "Platform", render: r => {
+      const pl = PLATFORMS.find(p => p.id === r.platform);
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <PlatformIcon name={pl?.icon || r.platform} size={16} />
+          <span style={{ fontSize: 12 }}>{pl?.name || r.platform}</span>
+        </div>
+      );
+    }},
+    { label: "Business", render: r => <span style={{ fontSize: 12, color: C.g600 }}>{r.business_type || r.businessType || "—"}</span> },
+    { label: "Amount", render: r => <span style={{ fontWeight: 700, color: C.primary, fontSize: 13 }}>${r.amount || 52}.00</span> },
+    { label: "Date", render: r => <span style={{ fontSize: 11, color: C.g400 }}>{r.submittedAt || (r.created_at ? new Date(r.created_at).toLocaleDateString() : "—")}</span> },
+    { label: "Status", render: r => <Badge status={r.status} /> },
+    { label: "Actions", render: r => (
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <select
+          value={r.status}
+          disabled={savingId === r.id}
+          onChange={e => updateStatus(r.id, e.target.value)}
+          style={{ fontSize: 12, borderRadius: 7, border: `1px solid ${C.g200}`, padding: "5px 8px", background: "#fff", cursor: "pointer" }}
+        >
+          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+        </select>
+        <button onClick={() => setViewRequest(r)}
+          style={{ background: C.g100, border: "none", borderRadius: 7, padding: "5px 10px", fontSize: 12, cursor: "pointer", color: C.g600 }}>
+          View
+        </button>
+      </div>
+    )},
+  ];
+
+  return (
+    <PageShell title="Agency Ad Accounts" subtitle="Manage requests and platform pricing.">
+      {error && <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: "12px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>}
+      {success && <div style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#166534", padding: "12px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{success}</div>}
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 22 }}>
+        {[["Total", statCounts.total, C.blue], ["Pending", statCounts.pending, "#d97706"], ["In Review", statCounts.in_review, C.blue], ["Approved", statCounts.approved, C.green], ["Rejected", statCounts.rejected, C.red]].map(([l, v, c]) => (
+          <Card key={l}><div style={{ fontSize: 11, color: C.g400, marginBottom: 5 }}>{l}</div><div style={{ fontSize: 22, fontWeight: 900, color: c }}>{v}</div></Card>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 20, background: C.g100, borderRadius: 10, padding: 4, width: "fit-content" }}>
+        {[["requests", "📋 Requests"], ["platforms", "⚙ Platform Settings"]].map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            style={{ padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, fontFamily: "inherit",
+              background: tab === key ? "#fff" : "transparent",
+              color: tab === key ? C.g800 : C.g400,
+              boxShadow: tab === key ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Requests Tab ── */}
+      {tab === "requests" && (
+        <Card>
+          <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+            <input placeholder="🔍 Search by account, user, platform…" value={search} onChange={e => setSearch(e.target.value)}
+              style={{ flex: 1, minWidth: 200, border: `1px solid ${C.g200}`, borderRadius: 9, padding: "9px 14px", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              style={{ background: C.g50, border: `1px solid ${C.g200}`, borderRadius: 9, padding: "9px 14px", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              <option value="All">All Statuses</option>
+              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+            </select>
+          </div>
+          <DataTable cols={cols} rows={filteredRequests} emptyMsg="No ad account requests yet." />
+        </Card>
+      )}
+
+      {/* ── Platform Settings Tab ── */}
+      {tab === "platforms" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16, marginBottom: 20 }}>
+            {PLATFORMS.map(p => {
+              const ps = platformPrices[p.id] || DEFAULT_PLATFORM_PRICES[p.id];
+              return (
+                <Card key={p.id}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: C.g50, border: `1px solid ${C.g200}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <PlatformIcon name={p.icon} size={24} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: C.g800 }}>{p.name}</div>
+                      <div style={{ fontSize: 12, color: C.g400 }}>{p.sub}</div>
+                    </div>
+                    {/* Active toggle */}
+                    <div onClick={() => updatePrice(p.id, "active", !ps.active)}
+                      style={{ width: 40, height: 22, borderRadius: 11, background: ps.active ? C.primary : C.g300, cursor: "pointer", position: "relative", transition: "all .2s", flexShrink: 0 }}>
+                      <div style={{ width: 18, height: 18, background: "#fff", borderRadius: "50%", position: "absolute", top: 2, left: ps.active ? 20 : 2, transition: "all .2s" }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.g500, fontWeight: 600, marginBottom: 6 }}>Service Price (USD)</div>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.g400, fontSize: 14, fontWeight: 700 }}>$</span>
+                        <input type="number" value={ps.price} min={0}
+                          onChange={e => updatePrice(p.id, "price", Number(e.target.value))}
+                          style={{ width: "100%", border: `1.5px solid ${C.g200}`, borderRadius: 9, padding: "10px 12px 10px 24px", fontSize: 14, fontWeight: 700, color: C.g800, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.g500, fontWeight: 600, marginBottom: 6 }}>Min. Top-up (USD)</div>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.g400, fontSize: 14, fontWeight: 700 }}>$</span>
+                        <input type="number" value={ps.minTopup ?? 200} min={0}
+                          onChange={e => updatePrice(p.id, "minTopup", Number(e.target.value))}
+                          style={{ width: "100%", border: `1.5px solid ${C.g200}`, borderRadius: 9, padding: "10px 12px 10px 24px", fontSize: 14, fontWeight: 700, color: C.g800, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.g500, fontWeight: 600, marginBottom: 6 }}>Top-up Fee (%)</div>
+                      <div style={{ position: "relative" }}>
+                        <input type="number" value={ps.fee} min={0} max={100}
+                          onChange={e => updatePrice(p.id, "fee", Number(e.target.value))}
+                          style={{ width: "100%", border: `1.5px solid ${C.g200}`, borderRadius: 9, padding: "10px 30px 10px 12px", fontSize: 14, fontWeight: 700, color: C.g800, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                        <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: C.g400, fontSize: 14, fontWeight: 700 }}>%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12, background: C.g50, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.g500 }}>
+                    User pays: <strong style={{ color: C.g800 }}>${ps.price}</strong> service + topup amount + <strong style={{ color: C.primary }}>{ps.fee}%</strong> fee on topup
+                  </div>
+                  {!ps.active && (
+                    <div style={{ marginTop: 10, background: C.redL, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.red, fontWeight: 700, textAlign: "center" }}>
+                      Hidden from users
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+          <Btn onClick={savePrices} disabled={savingPrices}>
+            {savingPrices ? "Saving…" : "💾 Save Platform Settings"}
+          </Btn>
+        </>
+      )}
+
+      {/* Request Detail Modal */}
+      {viewRequest && (
+        <Modal title="Request Details" onClose={() => setViewRequest(null)} width={500}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {[
+              ["Request ID", viewRequest.requestId || viewRequest.id],
+              ["Account Name", viewRequest.account_name || viewRequest.accountName],
+              ["User", getUserEmail(viewRequest.user_id)],
+              ["Platform", PLATFORMS.find(p => p.id === viewRequest.platform)?.name || viewRequest.platform],
+              ["Business Type", viewRequest.business_type || viewRequest.businessType],
+              ["Business Name", viewRequest.business_name || viewRequest.businessName],
+              ["Email", viewRequest.business_email || viewRequest.email],
+              ["Timezone", viewRequest.timezone],
+              ["Currency", viewRequest.currency],
+              ["BM ID", viewRequest.bm_id || viewRequest.bmId],
+              ["Amount", `$${viewRequest.amount || 52}.00`],
+              ["Submitted", viewRequest.submittedAt || (viewRequest.created_at ? new Date(viewRequest.created_at).toLocaleString() : "—")],
+            ].filter(([, v]) => v).map(([k, v]) => (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.g100}`, fontSize: 13 }}>
+                <span style={{ color: C.g500, fontWeight: 600 }}>{k}</span>
+                <span style={{ fontWeight: 700, color: C.g700, textAlign: "right", maxWidth: 260 }}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12, color: C.g500, fontWeight: 600, marginBottom: 8 }}>Update Status</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {STATUS_OPTIONS.map(s => (
+                <button key={s} onClick={() => { updateStatus(viewRequest.id, s); setViewRequest(r => ({ ...r, status: s })); }}
+                  style={{ padding: "8px 16px", borderRadius: 8, border: `2px solid ${viewRequest.status === s ? C.primary : C.g200}`, background: viewRequest.status === s ? C.primaryLight : "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: viewRequest.status === s ? C.primary : C.g600 }}>
+                  {s.replace("_", " ")}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
+    </PageShell>
   );
 }

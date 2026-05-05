@@ -217,7 +217,18 @@ export async function createTicket(ticket) {
 // ========================
 
 export async function fetchAdAccountRequests() {
-  return apiGet(`${API_BASE}/ad-account-requests`, { order: 'created_at', ascending: 'false' })
+  const data = await apiGet(`${API_BASE}/ad-account-requests`, { order: 'created_at', ascending: 'false' })
+  return (data || []).map(r => ({
+    ...r,
+    accountName:  r.account_name   ?? r.accountName,
+    pageLinks:    r.page_links     ?? r.pageLinks,
+    bmId:         r.bm_id          ?? r.bmId,
+    businessName: r.business_name  ?? r.businessName,
+    businessType: r.business_type  ?? r.businessType,
+    email:        r.business_email ?? r.email,
+    requestId:    r.request_id     ?? r.requestId,
+    submittedAt:  r.submitted_at   ?? r.submittedAt,
+  }))
 }
 
 export async function createAdAccountRequest(req) {
@@ -225,11 +236,42 @@ export async function createAdAccountRequest(req) {
 }
 
 // ========================
+// PLATFORM PRICES
+// ========================
+
+export async function fetchPlatformPrices() {
+  const rows = await apiGet(`${API_BASE}/platform-prices`)
+  const map = {}
+  for (const r of (rows || [])) {
+    map[r.id] = {
+      price:    Number(r.price),
+      fee:      Number(r.fee),
+      minTopup: Number(r.min_topup ?? 200),
+      active:   r.active !== false,
+    }
+  }
+  return map
+}
+
+export async function updatePlatformPrice(id, updates) {
+  return apiPut(`${API_BASE}/platform-prices`, { id, ...updates })
+}
+
+// ========================
 // PURCHASES
 // ========================
 
-export async function fetchPurchases() {
-  return apiGet(`${API_BASE}/purchases`, { order: 'created_at', ascending: 'false' })
+export async function fetchPurchases(userId = null) {
+  const params = { order: 'created_at', ascending: 'false' }
+  if (userId) params.user_id = userId
+  const data = await apiGet(`${API_BASE}/purchases`, params)
+  return (data || []).map(p => ({
+    ...p,
+    productId:    p.product_id    ?? p.productId,
+    productTitle: p.product_title ?? p.productTitle,
+    lineId:       p.line_id       ?? p.lineId,
+    purchasedAt:  p.purchased_at  ?? p.purchasedAt,
+  }))
 }
 
 export async function createPurchase(purchase) {
