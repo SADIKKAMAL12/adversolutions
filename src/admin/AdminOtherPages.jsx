@@ -290,6 +290,7 @@ export function AdminUsersPage({ users, setStore }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [error, setError] = useState("");
+  const [suspendingId, setSuspendingId] = useState(null);
 
   const filteredUsers = users.filter(u => {
     const matchesSearch = !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase());
@@ -315,14 +316,41 @@ export function AdminUsersPage({ users, setStore }) {
     refetch();
   }, [refetch]);
 
+  const toggleSuspend = async (user) => {
+    const isSuspended = user.status === 'suspended';
+    const newStatus = isSuspended ? 'active' : 'suspended';
+    setSuspendingId(user.id);
+    setError("");
+    try {
+      await apiPut('users', { id: user.id, status: newStatus });
+      setStore(s => ({ ...s, users: s.users.map(u => u.id === user.id ? { ...u, status: newStatus } : u) }));
+      // WhatsApp suspension hook: configure WHATSAPP_API_URL in env to integrate
+    } catch (err) {
+      setError(`${isSuspended ? 'Unsuspend' : 'Suspend'} failed: ` + err.message);
+    } finally {
+      setSuspendingId(null);
+    }
+  };
+
   const cols = [
-    { label: "", render: () => <input type="checkbox" />, style: { width: 40 } },
     { label: "User", render: r => <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Avatar initials={r.name?.split(" ").map(w => w[0]).join("") || "?"} size={32} /><div><div style={{ fontWeight: 700, fontSize: 13 }}>{r.name}</div><div style={{ fontSize: 11, color: C.g400 }}>{r.email}</div></div></div> },
+    { label: "Phone", render: r => <span style={{ fontSize: 12, color: C.g500 }}>{r.phone || '—'}</span> },
     { label: "Balance", render: r => <span style={{ fontWeight: 700, color: C.primary }}>${(r.balance || 0).toLocaleString()}.00</span> },
-    { label: "Accounts", render: r => <span style={{ fontWeight: 700 }}>{r.accounts || 0}</span> },
     { label: "Status", render: r => <Badge status={r.status} /> },
     { label: "Joined", render: r => <span style={{ fontSize: 12, color: C.g400 }}>{r.joined}</span> },
-    { label: "Actions", render: r => <div style={{ display: "flex", gap: 8 }}><span style={{ cursor: "pointer" }} onClick={() => setEditUser(r)}>✏️</span></div> },
+    { label: "Actions", render: r => (
+      <div style={{ display: "flex", gap: 6 }}>
+        <Btn variant="outline" size="sm" onClick={() => setEditUser(r)}>✏️ Edit</Btn>
+        <Btn
+          variant={r.status === 'suspended' ? 'success' : 'warning'}
+          size="sm"
+          onClick={() => toggleSuspend(r)}
+          disabled={suspendingId === r.id}
+        >
+          {suspendingId === r.id ? '…' : r.status === 'suspended' ? '▶ Unsuspend' : '⏸ Suspend'}
+        </Btn>
+      </div>
+    )},
   ];
 
   const saveUser = async (updated) => {
@@ -333,6 +361,7 @@ export function AdminUsersPage({ users, setStore }) {
         id: updated.id,
         name: updated.name,
         email: updated.email,
+        phone: updated.phone || null,
         balance: updated.balance,
         status: updated.status,
       });
@@ -353,7 +382,7 @@ export function AdminUsersPage({ users, setStore }) {
         <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: "12px 16px", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>
       )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 22 }}>
-        {[["Total Users", users.length, C.blue], ["Active", users.filter(u => u.status === "active").length, C.green], ["Banned", users.filter(u => u.status === "banned").length, C.red], ["Pending", users.filter(u => u.status === "pending").length, C.yellow]].map(([l, v, c]) => (
+        {[["Total Users", users.length, C.blue], ["Active", users.filter(u => u.status === "active").length, C.green], ["Suspended", users.filter(u => u.status === "suspended").length, C.yellow], ["Banned", users.filter(u => u.status === "banned").length, C.red]].map(([l, v, c]) => (
           <Card key={l}><div style={{ fontSize: 12, color: C.g400, marginBottom: 6 }}>{l}</div><div style={{ fontSize: 24, fontWeight: 900, color: c }}>{v}</div></Card>
         ))}
       </div>
@@ -363,7 +392,7 @@ export function AdminUsersPage({ users, setStore }) {
             style={{ flex: 1, border: `1px solid ${C.g200}`, borderRadius: 9, padding: "9px 14px", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             style={{ background: C.g50, border: `1px solid ${C.g200}`, borderRadius: 9, padding: "9px 14px", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
-            <option>All Status</option><option>Active</option><option>Banned</option><option>Pending</option>
+            <option>All Status</option><option>Active</option><option>Suspended</option><option>Banned</option><option>Pending</option>
           </select>
           <Btn variant="outline" size="sm" onClick={refetch} disabled={loading}>{loading ? '↻' : '↻ Refresh'}</Btn>
         </div>
@@ -376,10 +405,11 @@ export function AdminUsersPage({ users, setStore }) {
       {editUser && (
         <Modal title="Edit User" onClose={() => setEditUser(null)}>
           {error && <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: "10px 14px", borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{error}</div>}
-          <Input label="Name" value={editUser.name} onChange={e => setEditUser(u => ({ ...u, name: e.target.value }))} />
-          <Input label="Email" value={editUser.email} onChange={e => setEditUser(u => ({ ...u, email: e.target.value }))} />
-          <Input label="Balance" type="number" value={editUser.balance} onChange={e => setEditUser(u => ({ ...u, balance: Number(e.target.value) }))} />
-          <Select label="Status" value={editUser.status} onChange={e => setEditUser(u => ({ ...u, status: e.target.value }))} options={["active", "banned", "pending"]} />
+          <Input label="Name" value={editUser.name || ''} onChange={e => setEditUser(u => ({ ...u, name: e.target.value }))} />
+          <Input label="Email" value={editUser.email || ''} onChange={e => setEditUser(u => ({ ...u, email: e.target.value }))} />
+          <Input label="WhatsApp Phone" placeholder="+1234567890" value={editUser.phone || ''} onChange={e => setEditUser(u => ({ ...u, phone: e.target.value }))} />
+          <Input label="Balance" type="number" value={editUser.balance || 0} onChange={e => setEditUser(u => ({ ...u, balance: Number(e.target.value) }))} />
+          <Select label="Status" value={editUser.status || 'active'} onChange={e => setEditUser(u => ({ ...u, status: e.target.value }))} options={["active", "suspended", "banned", "pending"]} />
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
             <Btn variant="outline" onClick={() => setEditUser(null)}>Cancel</Btn>
             <Btn onClick={() => saveUser(editUser)} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Btn>
@@ -399,6 +429,7 @@ export function AdminOrdersPage({ orders, setStore }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const filteredOrders = orders.filter(o => {
     const matchesSearch = !search || o.id?.toLowerCase().includes(search.toLowerCase()) || o.user?.toLowerCase().includes(search.toLowerCase());
@@ -450,8 +481,25 @@ export function AdminOrdersPage({ orders, setStore }) {
     }
   };
 
+  const cancelOrder = (id) => updateStatus(id, 'cancelled');
+
+  const deleteOrder = async (id) => {
+    setSavingId(id);
+    setError("");
+    try {
+      const res = await fetch(`/api/crud?table=orders&id=${id}`, { method: 'DELETE' });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Delete failed'); }
+      setStore(s => ({ ...s, orders: s.orders.filter(o => o.id !== id) }));
+    } catch (err) {
+      setError('Delete failed: ' + err.message);
+    } finally {
+      setSavingId(null);
+      setConfirmDelete(null);
+    }
+  };
+
   const cols = [
-    { label: "Order ID", render: r => <span style={{ fontWeight: 700, color: C.g700 }}>{r.id}</span> },
+    { label: "Order ID", render: r => <span style={{ fontWeight: 700, color: C.g700, fontSize: 12 }}>{r.id}</span> },
     { label: "User", render: r => <span style={{ fontSize: 12, color: C.g500 }}>{r.user_email || r.user}</span> },
     { label: "Type", render: r => <span style={{ fontSize: 12 }}>{r.type}</span> },
     { label: "Platform", render: r => <span style={{ fontSize: 12 }}>{r.platform}</span> },
@@ -459,14 +507,20 @@ export function AdminOrdersPage({ orders, setStore }) {
     { label: "Status", render: r => <Badge status={r.status} /> },
     { label: "Date", render: r => <span style={{ fontSize: 12, color: C.g400 }}>{r.date}</span> },
     { label: "Actions", render: r => (
-      <select
-        value={r.status}
-        disabled={savingId === r.id}
-        onChange={e => updateStatus(r.id, e.target.value)}
-        style={{ fontSize: 12, borderRadius: 6, border: `1px solid ${C.g200}`, padding: "4px 8px" }}
-      >
-        <option>pending</option><option>processing</option><option>completed</option><option>cancelled</option>
-      </select>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <select
+          value={r.status}
+          disabled={savingId === r.id}
+          onChange={e => updateStatus(r.id, e.target.value)}
+          style={{ fontSize: 12, borderRadius: 6, border: `1px solid ${C.g200}`, padding: "4px 8px", background: "#fff" }}
+        >
+          <option>pending</option><option>processing</option><option>completed</option><option>cancelled</option>
+        </select>
+        {r.status !== 'cancelled' && (
+          <Btn variant="warning" size="sm" onClick={() => cancelOrder(r.id)} disabled={savingId === r.id}>✕ Cancel</Btn>
+        )}
+        <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(r)} disabled={savingId === r.id}>🗑</Btn>
+      </div>
     )},
   ];
 
@@ -497,6 +551,19 @@ export function AdminOrdersPage({ orders, setStore }) {
           <Pagination total={`${filteredOrders.length} orders`} showing={`1–${filteredOrders.length}`} pages={["‹", 1, 2, 3, "...", Math.ceil(filteredOrders.length / 10) || 1, "›"]} />
         </div>
       </Card>
+      {confirmDelete && (
+        <Modal title="Delete Order" onClose={() => setConfirmDelete(null)} width={400}>
+          <p style={{ fontSize: 14, color: C.g600, marginBottom: 20 }}>
+            Permanently delete order <strong style={{ color: C.g800 }}>{confirmDelete.id}</strong>? This cannot be undone.
+          </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Btn variant="outline" onClick={() => setConfirmDelete(null)} style={{ flex: 1 }}>Cancel</Btn>
+            <Btn variant="danger" onClick={() => deleteOrder(confirmDelete.id)} disabled={savingId === confirmDelete.id} style={{ flex: 1 }}>
+              {savingId === confirmDelete.id ? 'Deleting…' : 'Yes, Delete'}
+            </Btn>
+          </div>
+        </Modal>
+      )}
     </PageShell>
   );
 }

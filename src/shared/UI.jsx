@@ -56,6 +56,7 @@ export const Badge = ({ status }) => {
     disabled:       { bg: C.redL,     c: C.red    },
     rejected:       { bg: C.redL,     c: C.red    },
     banned:         { bg: C.redL,     c: C.red    },
+    suspended:      { bg: C.yellowL,  c: "#d97706" },
     open:           { bg: C.blueL,    c: C.blue   },
   };
   const s = map[(status && status.toLowerCase())] || map.pending;

@@ -10,13 +10,11 @@ import RegisterPage from './user/RegisterPage.jsx';
 import UserDashboard from './user/UserDashboard.jsx';
 import AgencyAdAccountsPage from './user/AgencyAdAccountsPage.jsx';
 import PreVerifiedPage from './user/PreVerifiedPage.jsx';
-import MediaBuyersPage from './user/MediaBuyersPage.jsx';
-import { ProjectsListPage, ProjectDetailPage, SupportPage } from './user/ProjectsAndSupport.jsx'
+import { SupportPage } from './user/ProjectsAndSupport.jsx'
 import PurchaseHistoryPage from './user/PurchaseHistoryPage.jsx';
 import BalancePage from './user/BalancePage.jsx';
 import AdminLoginPage from './user/AdminLoginPage.jsx';
 import AdminDashboard from './admin/AdminDashboard.jsx';
-import AdminMediaBuyersPage from './admin/AdminMediaBuyersPage.jsx';
 import { AdminUsersPage, AdminInventoryPage, AdminOrdersPage, AdminDepositsPage, AdminTicketsPage, AdminReportsPage, AdminSettingsPage, AdminAgencyAdAccountsPage } from './admin/AdminOtherPages.jsx';
 
 function ThemedMain({ children, role }) {
@@ -45,20 +43,6 @@ function AppRoutes() {
   useEffect(() => {
     hydrateStore().then(() => setLoading(false));
   }, []);
-
-  const approveBuyer = useCallback((id) => {
-    setStore(s => ({
-      ...s,
-      mediaBuyers: s.mediaBuyers.map(m => m.id === id ? { ...m, status: "approved" } : m)
-    }));
-  }, [setStore]);
-
-  const rejectBuyer = useCallback((id, reason) => {
-    setStore(s => ({
-      ...s,
-      mediaBuyers: s.mediaBuyers.map(m => m.id === id ? { ...m, status: "rejected", rejectReason: reason } : m)
-    }));
-  }, [setStore]);
 
   const addTransaction = useCallback((tx) => {
     setStore(s => ({
@@ -125,9 +109,6 @@ function AppRoutes() {
               <Route path="/agency-ad-accounts" element={<AgencyAdAccountsPage balance={store.balance} requests={store.adAccountRequests} setStore={setStore} platformPrices={store.platformPrices} />} />
               <Route path="/preverified-accounts" element={<PreVerifiedPage products={store.inventoryProducts} lines={store.inventoryLines} balance={store.balance} purchases={store.purchases} setStore={setStore} />} />
               <Route path="/purchase-history" element={<PurchaseHistoryPage purchases={store.purchases} />} />
-              <Route path="/media-buyers" element={<MediaBuyersPage mediaBuyers={store.mediaBuyers} setStore={setStore} />} />
-              <Route path="/projects" element={<ProjectsListPage projects={store.projects} />} />
-              <Route path="/projects/:id" element={<ProjectDetailPage projects={store.projects} setStore={setStore} />} />
               <Route path="/balance" element={<BalancePage balance={store.balance} transactions={store.transactions} paymentMethods={store.paymentMethods} addTransaction={addTransaction} addBalance={addBalance} setStore={setStore} />} />
               <Route path="/support" element={<SupportPage tickets={store.supportTickets} setStore={setStore} />} />
               <Route path="/" element={<UserDashboard balance={store.balance} transactions={store.transactions} />} />
@@ -135,17 +116,16 @@ function AppRoutes() {
           )}
           {user.role === "admin" && (
             <>
-              <Route path="/admin" element={<AdminDashboard mediaBuyers={store.mediaBuyers} users={store.users} orders={store.orders} deposits={store.deposits} />} />
+              <Route path="/admin" element={<AdminDashboard users={store.users} orders={store.orders} deposits={store.deposits} />} />
               <Route path="/admin/users" element={<AdminUsersPage users={store.users} setStore={setStore} />} />
               <Route path="/admin/inventory" element={<AdminInventoryPage products={store.inventoryProducts} lines={store.inventoryLines} setStore={setStore} />} />
               <Route path="/admin/orders" element={<AdminOrdersPage orders={store.orders} setStore={setStore} />} />
               <Route path="/admin/deposits" element={<AdminDepositsPage deposits={store.deposits} setStore={setStore} addBalance={addBalance} />} />
-              <Route path="/admin/media-buyers" element={<AdminMediaBuyersPage mediaBuyers={store.mediaBuyers} onApprove={approveBuyer} onReject={rejectBuyer} />} />
               <Route path="/admin/tickets" element={<AdminTicketsPage tickets={store.supportTickets} />} />
               <Route path="/admin/reports" element={<AdminReportsPage />} />
               <Route path="/admin/agency-accounts" element={<AdminAgencyAdAccountsPage requests={store.adAccountRequests} users={store.users} setStore={setStore} platformPrices={store.platformPrices} />} />
               <Route path="/admin/settings" element={<AdminSettingsPage paymentMethods={store.paymentMethods} businessTypes={store.businessTypes} setStore={setStore} />} />
-              <Route path="/" element={<AdminDashboard mediaBuyers={store.mediaBuyers} users={store.users} orders={store.orders} deposits={store.deposits} />} />
+              <Route path="/" element={<AdminDashboard users={store.users} orders={store.orders} deposits={store.deposits} />} />
             </>
           )}
         </ThemedMain>

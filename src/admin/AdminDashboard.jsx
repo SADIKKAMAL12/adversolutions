@@ -6,15 +6,13 @@ import { PageShell } from '../shared/UI.jsx';
 import { Card, PlatformIcon, Badge, Btn } from '../shared/UI.jsx';
 import { isSupabaseReady } from '../lib/supabase.js';
 
-export default function AdminDashboard({ mediaBuyers, users, orders, deposits }) {
+export default function AdminDashboard({ users, orders, deposits }) {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const TC = getThemeColors(theme === 'dark');
-  const buyers = mediaBuyers || [];
   const userList = users || [];
   const orderList = orders || [];
   const depositList = deposits || [];
-  const pendingBuyers = buyers.filter(m => m.status === "pending").length;
   const pendingDeposits = depositList.filter(d => d.status === "pending").length;
   const totalBalance = userList.reduce((a, u) => a + (u.balance || 0), 0);
 
@@ -52,7 +50,6 @@ export default function AdminDashboard({ mediaBuyers, users, orders, deposits })
     orders: orderList.length,
     deposits: depositList.length,
     tickets: 0,
-    mediaBuyers: buyers.length,
     totalBalance: totalBalance,
   };
 
@@ -75,7 +72,7 @@ export default function AdminDashboard({ mediaBuyers, users, orders, deposits })
               ["👥", "Total Users", stats.users, C.blue],
               ["◧", "Ad Accounts", "2,346", C.green],
               ["✓", "Verified Accounts", "4,562", C.primary],
-              ["👤", "Media Buyers", stats.mediaBuyers, C.purple]
+              ["🛒", "Total Orders", stats.orders, "#8b5cf6"]
             ].map(([ic, l, v, c]) => (
               <Card key={l}>
                 <div style={{ width: 38, height: 38, background: c + "20", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, marginBottom: 10 }}>{ic}</div>
@@ -100,18 +97,6 @@ export default function AdminDashboard({ mediaBuyers, users, orders, deposits })
               </Card>
             ))}
           </div>
-
-          {pendingBuyers > 0 && (
-            <div onClick={() => navigate("/admin/media-buyers")}
-              style={{ background: C.yellowL, border: `2px solid ${C.yellow}50`, borderRadius: 13, padding: "16px 20px", marginBottom: 20, display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
-              <div style={{ width: 44, height: 44, background: C.yellow + "30", borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>⏳</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, color: TC.g800 }}>{pendingBuyers} Media Buyer Application{pendingBuyers > 1 ? "s" : ""} Pending Review</div>
-                <div style={{ fontSize: 13, color: TC.g500, marginTop: 2 }}>Review and approve or reject media buyer applications to make them visible on the platform.</div>
-              </div>
-              <Btn variant="warning" size="sm">Review Now →</Btn>
-            </div>
-          )}
 
           {pendingDeposits > 0 && (
             <div onClick={() => navigate("/admin/deposits")}

@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'banned')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'banned', 'suspended')),
+  phone TEXT,
   balance NUMERIC(12,2) NOT NULL DEFAULT 0,
   accounts INTEGER NOT NULL DEFAULT 0,
   joined TEXT,
@@ -198,6 +199,9 @@ CREATE TABLE IF NOT EXISTS platform_prices (
   active BOOLEAN NOT NULL DEFAULT true
 );
 ALTER TABLE platform_prices ADD COLUMN IF NOT EXISTS min_topup NUMERIC(12,2) NOT NULL DEFAULT 200;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_status_check;
+ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (status IN ('active', 'pending', 'banned', 'suspended'));
 
 -- Announcements
 CREATE TABLE IF NOT EXISTS announcements (

@@ -27,7 +27,7 @@ export default function UserDashboard({ balance, transactions }) {
                 [C.primary, "➕", "Create Ad Account", "Request new ad account", "/agency-ad-accounts"],
                 [C.green, "◈", "Top Up Balance", "Add funds to account", "/balance"],
                 [C.blue, "🛒", "Buy Verified Account", "Browse accounts", "/preverified-accounts"],
-                [C.yellow, "👤", "Hire Media Buyer", "Find expert media buyers", "/media-buyers"],
+                [C.yellow, "💬", "Contact Support", "Get help from our team", "/support"],
               ].map(([col, ic, l, s, pg]) => (
                 <div key={l} onClick={() => navigate(pg)}
                   style={{ background: TC.g50, border: `1px solid ${TC.g200}`, borderRadius: 13, padding: "16px 12px", cursor: "pointer", textAlign: "center", transition: "all .15s" }}

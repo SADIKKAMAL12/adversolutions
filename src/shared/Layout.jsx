@@ -8,8 +8,6 @@ const USER_NAV = [
   { path: "/agency-ad-accounts",    label: "Agency Ad Accounts",     icon: "◧"  },
   { path: "/preverified-accounts",  label: "Pre-Verified Accounts",  icon: "✓", badge: "HOT" },
   { path: "/purchase-history",      label: "Purchase History",       icon: "🧾" },
-  { path: "/media-buyers",          label: "Media Buyers",           icon: "👤" },
-  { path: "/projects",              label: "Projects",               icon: "📋" },
   { path: "/balance",               label: "Balance",                icon: "◈"  },
   { path: "/support",               label: "Support",                icon: "💬" },
 ];
@@ -19,7 +17,6 @@ const ADMIN_NAV = [
   { path: "/admin/users",           label: "Users",                 icon: "👥"          },
   { path: "/admin/inventory",       label: "Pre-Verified Accounts", icon: "✓"           },
   { path: "/admin/agency-accounts", label: "Agency Ad Accounts",    icon: "◧"           },
-  { path: "/admin/media-buyers",    label: "Media Buyers",          icon: "👤", badge: "NEW" },
   { path: "/admin/orders",          label: "Orders",                icon: "⊡"           },
   { path: "/admin/deposits",        label: "Deposits",              icon: "↓"           },
   { path: "/admin/tickets",         label: "Support Tickets",       icon: "💬"          },
