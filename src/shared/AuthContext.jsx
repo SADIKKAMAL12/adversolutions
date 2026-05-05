@@ -82,7 +82,7 @@ export function AuthProvider({ children }) {
     return data;
   }, [setLocalStore]);
 
-  const register = useCallback(async (name, email, password) => {
+  const register = useCallback(async (name, email, password, phone) => {
     // Check if email already exists via API
     try {
       const checkRes = await fetch(`/api/crud?table=users&email=${encodeURIComponent(email)}&single=true`);
@@ -104,6 +104,7 @@ export function AuthProvider({ children }) {
           status: 'active',
           balance: 0,
           accounts: 0,
+          phone: phone || null,
           joined: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         }),
       });

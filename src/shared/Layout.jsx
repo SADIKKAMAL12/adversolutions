@@ -22,6 +22,7 @@ const ADMIN_NAV = [
   { path: "/admin/tickets",         label: "Support Tickets",       icon: "💬"          },
   { path: "/admin/reports",         label: "Reports",               icon: "📊"          },
   { path: "/admin/settings",        label: "System Settings",       icon: "⚙"           },
+  { path: "/admin/whatsapp",        label: "WhatsApp OTP",          icon: "📱"          },
 ];
 
 export function Sidebar({ role, logout }) {

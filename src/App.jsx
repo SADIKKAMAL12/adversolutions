@@ -16,6 +16,7 @@ import BalancePage from './user/BalancePage.jsx';
 import AdminLoginPage from './user/AdminLoginPage.jsx';
 import AdminDashboard from './admin/AdminDashboard.jsx';
 import { AdminUsersPage, AdminInventoryPage, AdminOrdersPage, AdminDepositsPage, AdminTicketsPage, AdminReportsPage, AdminSettingsPage, AdminAgencyAdAccountsPage } from './admin/AdminOtherPages.jsx';
+import AdminWhatsAppPage from './admin/AdminWhatsAppPage.jsx';
 
 function ThemedMain({ children, role }) {
   const { theme } = useTheme();
@@ -125,6 +126,7 @@ function AppRoutes() {
               <Route path="/admin/reports" element={<AdminReportsPage />} />
               <Route path="/admin/agency-accounts" element={<AdminAgencyAdAccountsPage requests={store.adAccountRequests} users={store.users} setStore={setStore} platformPrices={store.platformPrices} />} />
               <Route path="/admin/settings" element={<AdminSettingsPage paymentMethods={store.paymentMethods} businessTypes={store.businessTypes} setStore={setStore} />} />
+              <Route path="/admin/whatsapp" element={<AdminWhatsAppPage />} />
               <Route path="/" element={<AdminDashboard users={store.users} orders={store.orders} deposits={store.deposits} />} />
             </>
           )}

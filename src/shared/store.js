@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import {
   fetchUsers, fetchTransactions, fetchInventoryProducts, fetchInventoryLines,
-  fetchOrders, fetchDeposits, fetchMediaBuyers, fetchPaymentMethods,
+  fetchOrders, fetchDeposits, fetchPaymentMethods,
   fetchBusinessTypes, fetchTickets, fetchAdAccountRequests, fetchPurchases,
-  fetchProjects, fetchAnnouncements, fetchPlatformPrices
+  fetchAnnouncements, fetchPlatformPrices
 } from '../lib/db.js'
 
 
@@ -166,75 +166,82 @@ export async function hydrateStore() {
   if (_hydrated) return;
 
   try {
-    // First batch — everything except purchases (which needs user_id filter)
+    // Phase 1: fetch shared/static data + users (to determine auth)
     const [
-      users, transactions, inventoryProducts, inventoryLines, orders,
-      deposits, mediaBuyers, paymentMethods, businessTypes, supportTickets,
-      adAccountRequests, projects, announcements, platformPrices
+      users, inventoryProducts, inventoryLines, paymentMethods,
+      businessTypes, announcements, platformPrices
     ] = await Promise.all([
       fetchUsers(),
-      fetchTransactions(),
       fetchInventoryProducts(),
       fetchInventoryLines(),
-      fetchOrders(),
-      fetchDeposits(),
-      fetchMediaBuyers(),
       fetchPaymentMethods(),
       fetchBusinessTypes(),
-      fetchTickets(),
-      fetchAdAccountRequests(),
-      fetchProjects(),
       fetchAnnouncements(),
       fetchPlatformPrices(),
     ]);
 
+    // Determine current user
     const session = getSession();
     let auth = null;
-    let balance = 1240;
+    let balance = 0;
 
-    if (session && session.user) {
-      const me = users.find(u => u.id === session.user.id);
+    if (session?.user) {
+      const me = (users || []).find(u => u.id === session.user.id);
       if (me) {
         auth = { ...me, role: me.role };
         balance = parseFloat(me.balance) || 0;
       }
     }
 
-    // Second: fetch purchases filtered by user (admin gets all)
-    const purchases = await fetchPurchases(
-      auth && auth.role !== 'admin' ? auth.id : null
-    );
+    const isAdmin = auth?.role === 'admin';
+    const userId = !isAdmin ? (auth?.id || null) : null;
+
+    // Phase 2: fetch user-scoped data (admin gets all, users get only theirs)
+    const [
+      transactions, orders, deposits, supportTickets,
+      adAccountRequests, purchases
+    ] = await Promise.all([
+      fetchTransactions(userId),
+      fetchOrders(userId),
+      fetchDeposits(userId),
+      fetchTickets(),
+      fetchAdAccountRequests(),
+      fetchPurchases(userId),
+    ]);
 
     _store = {
       auth,
       balance,
-      transactions: transactions || DEMO_STORE.transactions,
+      transactions: transactions || [],
       adAccountRequests: adAccountRequests || [],
       inventoryProducts: inventoryProducts || DEMO_STORE.inventoryProducts,
       inventoryLines: inventoryLines || DEMO_STORE.inventoryLines,
       purchases: purchases || [],
-      projects: (projects || []).map(p => ({
-        ...p,
-        updates: p.updates || [],
-        files: p.files || [],
-        messages: p.messages || [],
-      })),
-      mediaBuyers: mediaBuyers || DEMO_STORE.mediaBuyers,
-      deposits: deposits || DEMO_STORE.deposits,
-      orders: orders || DEMO_STORE.orders,
-      users: users || DEMO_STORE.users,
+      deposits: deposits || [],
+      orders: orders || [],
+      users: users || [],
       paymentMethods: paymentMethods || DEMO_STORE.paymentMethods,
       businessTypes: businessTypes || DEMO_STORE.businessTypes,
       supportTickets: supportTickets || [],
-      announcements: announcements || DEMO_STORE.announcements,
+      announcements: announcements || [],
       platformPrices: platformPrices || {},
     };
 
     _hydrated = true;
     _listeners.forEach(fn => fn(_store));
   } catch (err) {
-    console.error("Hydrate error:", err);
-    _store = { ...DEMO_STORE };
+    console.error('Hydrate error:', err);
+    // On failure, keep an empty but valid store
+    _store = {
+      ...DEMO_STORE,
+      transactions: [],
+      orders: [],
+      deposits: [],
+      users: [],
+      purchases: [],
+      supportTickets: [],
+      announcements: [],
+    };
     _hydrated = true;
     _listeners.forEach(fn => fn(_store));
   }

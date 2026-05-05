@@ -5,26 +5,28 @@ import { Logo, Btn, Input, Select } from '../shared/UI.jsx'
 import { useAuth } from '../shared/AuthContext.jsx'
 
 const STEPS = [
-  { label: "Account Info", sub: "Your personal details" },
-  { label: "Business Info", sub: "Your company details" },
-  { label: "Confirm", sub: "Review & finish" },
+  { label: "Account Info",  sub: "Your personal details"  },
+  { label: "Verify Phone",  sub: "WhatsApp OTP"           },
+  { label: "Business Info", sub: "Your company details"   },
+  { label: "Confirm",       sub: "Review & finish"        },
 ];
 
 function StepDots({ current }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 36 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 36, overflowX: 'auto', gap: 0 }}>
       {STEPS.map((s, i) => {
         const n = i + 1, done = current > n, active = current === n;
         return (
           <div key={n} style={{ display: "flex", alignItems: "flex-start", flex: n < STEPS.length ? 1 : "auto" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", border: `2px solid ${done || active ? C.primary : C.g300}`, background: done || active ? C.primary : "#fff", color: done || active ? "#fff" : C.g400, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, transition: "all .3s" }}>{done ? "✓" : n}</div>
-              <div style={{ textAlign: "center", width: 90 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: active ? C.primary : done ? C.g600 : C.g400 }}>{s.label}</div>
-                <div style={{ fontSize: 10, color: C.g400, marginTop: 1 }}>{s.sub}</div>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${done || active ? C.primary : C.g300}`, background: done || active ? C.primary : "#fff", color: done || active ? "#fff" : C.g400, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, transition: "all .3s" }}>
+                {done ? "✓" : n}
+              </div>
+              <div style={{ textAlign: "center", width: 70 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: active ? C.primary : done ? C.g600 : C.g400 }}>{s.label}</div>
               </div>
             </div>
-            {n < STEPS.length && <div style={{ flex: 1, height: 2, background: done ? C.primary : C.g200, marginTop: 17, transition: "all .3s" }} />}
+            {n < STEPS.length && <div style={{ flex: 1, height: 2, background: done ? C.primary : C.g200, marginTop: 15, transition: "all .3s" }} />}
           </div>
         );
       })}
@@ -33,7 +35,7 @@ function StepDots({ current }) {
 }
 
 function Step1({ data, set, onNext }) {
-  const ok = data.firstName && data.lastName && data.email && data.password && data.confirm;
+  const ok = data.firstName && data.lastName && data.email && data.password && data.confirm && data.phone;
   const passwordMatch = data.password === data.confirm;
   return (
     <>
@@ -42,7 +44,7 @@ function Step1({ data, set, onNext }) {
         <Input label="Last Name" required value={data.lastName} onChange={e => set("lastName", e.target.value)} placeholder="Doe" />
       </div>
       <Input label="Email Address" required type="email" value={data.email} onChange={e => set("email", e.target.value)} placeholder="john@example.com" />
-      <Input label="Phone Number" type="tel" value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="+1 555 123 4567" />
+      <Input label="WhatsApp Phone" required type="tel" value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="+1 555 123 4567" hint="Must be a WhatsApp-active number. OTP will be sent here." />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Input label="Password" required type="password" value={data.password} onChange={e => set("password", e.target.value)} placeholder="Min. 8 characters" />
         <Input label="Confirm Password" required type="password" value={data.confirm} onChange={e => set("confirm", e.target.value)} placeholder="Repeat password" />
@@ -58,7 +60,122 @@ function Step1({ data, set, onNext }) {
   );
 }
 
-function Step2({ data, set, onNext, onBack }) {
+function StepOTP({ phone, onVerified, onBack }) {
+  const [otp, setOtp] = useState('')
+  const [sending, setSending] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
+  const [countdown, setCountdown] = useState(0)
+
+  const startCountdown = () => {
+    setCountdown(60)
+    const t = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) { clearInterval(t); return 0; }
+        return c - 1;
+      })
+    }, 1000)
+  }
+
+  const sendOTP = async () => {
+    setSending(true)
+    setError('')
+    try {
+      const r = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Failed to send OTP')
+      setSent(true)
+      startCountdown()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const verifyOTP = async () => {
+    if (otp.length !== 6) return
+    setVerifying(true)
+    setError('')
+    try {
+      const r = await fetch('/api/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Verification failed')
+      onVerified()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  return (
+    <>
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>📱</div>
+        <h3 style={{ fontSize: 18, fontWeight: 800, color: C.g800, margin: '0 0 8px' }}>Verify your WhatsApp</h3>
+        <p style={{ fontSize: 14, color: C.g500, margin: 0 }}>
+          We'll send a 6-digit code to <strong style={{ color: C.g700 }}>{phone}</strong>
+        </p>
+      </div>
+
+      {error && (
+        <div style={{ background: C.redL, border: `1px solid ${C.red}40`, borderRadius: 9, padding: "11px 14px", fontSize: 13, color: C.red, marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
+      {!sent ? (
+        <>
+          <div style={{ background: C.g50, borderRadius: 10, padding: '14px 16px', marginBottom: 20, fontSize: 13, color: C.g500, lineHeight: 1.6 }}>
+            Make sure <strong>{phone}</strong> is active on WhatsApp before requesting the code.
+          </div>
+          <Btn full size="lg" onClick={sendOTP} disabled={sending}>
+            {sending ? 'Sending…' : '📲 Send OTP via WhatsApp'}
+          </Btn>
+        </>
+      ) : (
+        <>
+          <div style={{ background: C.greenL, border: `1px solid ${C.green}40`, borderRadius: 9, padding: '11px 14px', marginBottom: 20, fontSize: 13, color: C.green, fontWeight: 700 }}>
+            ✓ Code sent to {phone}. Check your WhatsApp.
+          </div>
+          <Input
+            label="Enter 6-digit OTP"
+            required
+            value={otp}
+            onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="483921"
+            style={{ letterSpacing: 8, fontSize: 22, textAlign: 'center', fontWeight: 900 }}
+          />
+          <Btn full size="lg" onClick={verifyOTP} disabled={otp.length !== 6 || verifying} style={{ marginBottom: 12 }}>
+            {verifying ? 'Verifying…' : 'Verify Code →'}
+          </Btn>
+          <div style={{ textAlign: 'center', fontSize: 13, color: C.g400 }}>
+            {countdown > 0
+              ? `Resend available in ${countdown}s`
+              : <span onClick={sendOTP} style={{ color: C.primary, cursor: 'pointer', fontWeight: 700 }}>Resend OTP</span>
+            }
+          </div>
+        </>
+      )}
+
+      <button onClick={onBack} style={{ marginTop: 16, width: '100%', background: 'none', border: 'none', color: C.g400, cursor: 'pointer', fontSize: 13, padding: '8px 0', fontFamily: 'inherit' }}>
+        ← Back
+      </button>
+    </>
+  )
+}
+
+function Step3({ data, set, onNext, onBack }) {
   const ok = data.businessName && data.businessType && data.country;
   return (
     <>
@@ -79,9 +196,10 @@ function Step2({ data, set, onNext, onBack }) {
   );
 }
 
-function Step3({ data, onDone, onBack }) {
+function Step4({ data, onDone, onBack, loading, error }) {
   return (
     <>
+      {error && <div style={{ background: C.redL, color: C.red, borderRadius: 9, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
       <div style={{ textAlign: "center", padding: "10px 0 20px" }}>
         <div style={{ width: 72, height: 72, background: C.greenL, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, margin: "0 auto 18px" }}>✓</div>
         <h2 style={{ fontSize: 22, fontWeight: 900, color: C.g800, margin: "0 0 8px" }}>You're all set!</h2>
@@ -91,7 +209,7 @@ function Step3({ data, onDone, onBack }) {
         {[
           ["Name", `${data.firstName} ${data.lastName}`],
           ["Email", data.email],
-          ["Phone", data.phone || "—"],
+          ["Phone", data.phone],
           ["Business", data.businessName],
           ["Type", data.businessType],
           ["Country", data.country],
@@ -105,7 +223,9 @@ function Step3({ data, onDone, onBack }) {
       </div>
       <div style={{ display: "flex", gap: 12 }}>
         <Btn variant="outline" size="lg" style={{ flex: 1 }} onClick={onBack}>← Edit</Btn>
-        <Btn size="lg" style={{ flex: 2 }} onClick={onDone}>🎉 Create My Account</Btn>
+        <Btn size="lg" style={{ flex: 2 }} onClick={onDone} disabled={loading}>
+          {loading ? 'Creating account…' : '🎉 Create My Account'}
+        </Btn>
       </div>
     </>
   );
@@ -127,7 +247,7 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
     try {
-      await register(`${data.firstName} ${data.lastName}`, data.email, data.password);
+      await register(`${data.firstName} ${data.lastName}`, data.email, data.password, data.phone);
       navigate("/dashboard");
     } catch (err) {
       setError(err.message || "Registration failed.");
@@ -151,7 +271,7 @@ export default function RegisterPage() {
             {[
               ["✅", "Free to sign up", "No setup fees or hidden charges"],
               ["⚡", "Instant access", "Start ordering accounts right away"],
-              ["🔒", "Secure & encrypted", "Your data and credentials are always protected"],
+              ["🔒", "WhatsApp verified", "Your account secured with OTP verification"],
               ["🎯", "Verified accounts", "Every account is pre-tested and ready to run"],
             ].map(([ic, t, s]) => (
               <div key={t} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
@@ -176,8 +296,9 @@ export default function RegisterPage() {
           </div>
           <StepDots current={step} />
           {step === 1 && <Step1 data={data} set={set} onNext={() => setStep(2)} />}
-          {step === 2 && <Step2 data={data} set={set} onNext={() => setStep(3)} onBack={() => setStep(1)} />}
-          {step === 3 && <Step3 data={data} onDone={handleDone} onBack={() => setStep(2)} />}
+          {step === 2 && <StepOTP phone={data.phone} onVerified={() => setStep(3)} onBack={() => setStep(1)} />}
+          {step === 3 && <Step3 data={data} set={set} onNext={() => setStep(4)} onBack={() => setStep(2)} />}
+          {step === 4 && <Step4 data={data} onDone={handleDone} onBack={() => setStep(3)} loading={loading} error={error} />}
         </div>
       </div>
     </div>

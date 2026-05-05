@@ -82,8 +82,10 @@ export async function updateUser(id, updates) {
 // TRANSACTIONS
 // ========================
 
-export async function fetchTransactions() {
-  return apiGet(`${API_BASE}/transactions`, { order: 'id', ascending: 'false' })
+export async function fetchTransactions(userId = null) {
+  const params = { order: 'id', ascending: 'false' }
+  if (userId) params.user_id = userId
+  return apiGet(`${API_BASE}/transactions`, params)
 }
 
 export async function createTransaction(tx) {
@@ -120,8 +122,10 @@ export async function createInventoryLines(lines) {
 // ORDERS
 // ========================
 
-export async function fetchOrders() {
-  return apiGet(`${API_BASE}/orders`, { order: 'created_at', ascending: 'false' })
+export async function fetchOrders(userId = null) {
+  const params = { order: 'created_at', ascending: 'false' }
+  if (userId) params.user_id = userId
+  return apiGet(`${API_BASE}/orders`, params)
 }
 
 export async function createOrder(order) {
@@ -136,8 +140,10 @@ export async function updateOrder(id, updates) {
 // DEPOSITS
 // ========================
 
-export async function fetchDeposits() {
-  return apiGet(`${API_BASE}/deposits`, { order: 'created_at', ascending: 'false' })
+export async function fetchDeposits(userId = null) {
+  const params = { order: 'created_at', ascending: 'false' }
+  if (userId) params.user_id = userId
+  return apiGet(`${API_BASE}/deposits`, params)
 }
 
 export async function createDeposit(deposit) {
