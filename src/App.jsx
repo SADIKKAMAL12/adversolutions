@@ -60,6 +60,7 @@ function AppRoutes() {
   }, [setStore]);
 
   useEffect(() => {
+    if (loading) return; // wait for hydration before any redirect
     const hash = window.location.hash.slice(1) || "/";
     if (!user) {
       if (!hash.startsWith("/login") && !hash.startsWith("/register") && !hash.startsWith("/admin/login")) {
@@ -73,7 +74,7 @@ function AppRoutes() {
         window.location.hash = "/dashboard";
       }
     }
-  }, [user]);
+  }, [user, loading]);
 
   if (loading) {
     return (

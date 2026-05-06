@@ -31,7 +31,6 @@ function CopyBtn({ text }) {
 
 export default function PurchaseHistoryPage({ purchases }) {
   const navigate = useNavigate()
-  const [revealed, setRevealed] = useState({})
   const [search, setSearch] = useState('')
 
   const filtered = (purchases || []).filter(p => {
@@ -43,8 +42,6 @@ export default function PurchaseHistoryPage({ purchases }) {
       (p.email || '').toLowerCase().includes(q)
     )
   })
-
-  const toggleReveal = (id) => setRevealed(r => ({ ...r, [id]: !r[id] }))
 
   if (!purchases || purchases.length === 0) {
     return (
@@ -101,8 +98,6 @@ export default function PurchaseHistoryPage({ purchases }) {
         ) : (
           filtered.map((p, i) => {
             const line = buildLine(p)
-            const isRevealed = !!revealed[p.id]
-            const maskedLine = `${p.email || ''}:${'•'.repeat(10)}${p.twofa ? ':' + p.twofa : ''}`
             return (
               <div key={p.id} style={{
                 display: 'grid',
@@ -131,14 +126,8 @@ export default function PurchaseHistoryPage({ purchases }) {
                     flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     border: `1px solid ${C.g200}`,
                   }}>
-                    {isRevealed ? line : maskedLine}
+                    {line}
                   </div>
-                  <button onClick={() => toggleReveal(p.id)} style={{
-                    background: C.g100, border: 'none', borderRadius: 7,
-                    padding: '5px 9px', fontSize: 13, cursor: 'pointer', flexShrink: 0,
-                  }}>
-                    {isRevealed ? '🙈' : '👁'}
-                  </button>
                   <CopyBtn text={line} />
                 </div>
 

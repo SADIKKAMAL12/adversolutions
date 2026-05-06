@@ -62,6 +62,7 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
   const [txFilter, setTxFilter] = useState("all");
   const [successBanner, setSuccessBanner] = useState(false);
   const [showMethod, setShowMethod] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // File upload state
   const fileInputRef = useRef(null);
@@ -91,6 +92,7 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
     if (!proofFile) { setUploadError("Please upload payment proof before submitting."); return; }
     if (!user) { alert("Please log in."); return; }
 
+    setSubmitting(true);
     const dateStr = new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
     const depositId = "DEP-" + Date.now();
 
@@ -142,6 +144,8 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
       setAmount("350.00");
     } catch (err) {
       alert("Failed to submit deposit: " + err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -157,6 +161,17 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
   return (
     <PageShell title="Balance & Transactions" subtitle="Manage your account balance, top up, and view your full transaction history.">
       {showMethod && <PaymentInfoModal method={showMethod} onClose={() => setShowMethod(null)} />}
+
+      {submitting && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <style>{`@keyframes _spin { to { transform: rotate(360deg) } }`}</style>
+          <div style={{ background: '#fff', borderRadius: 20, padding: '48px 56px', textAlign: 'center', minWidth: 300, boxShadow: '0 24px 64px rgba(0,0,0,.25)' }}>
+            <div style={{ width: 56, height: 56, border: '5px solid #f3f4f6', borderTop: `5px solid ${C.primary}`, borderRadius: '50%', animation: '_spin 0.8s linear infinite', margin: '0 auto 24px' }} />
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.g800, marginBottom: 8 }}>Processing Request…</div>
+            <div style={{ fontSize: 13, color: C.g500 }}>Submitting your deposit. Please don't close this page.</div>
+          </div>
+        </div>
+      )}
 
       {successBanner && (
         <div style={{ background: C.greenL, border: `1px solid ${C.green}40`, borderRadius: 13, padding: "14px 20px", marginBottom: 22, display: "flex", gap: 12, alignItems: "center" }}>
@@ -248,11 +263,7 @@ export default function BalancePage({ balance, transactions, paymentMethods, add
                     </div>
                   ))}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 18 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: 12, color: C.g500, marginBottom: 6, fontWeight: 600 }}>Your Account</label>
-                    <input placeholder="Email / Wallet / ID" style={{ width: "100%", border: `1.5px solid ${C.g200}`, borderRadius: 9, padding: "10px 14px", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
-                  </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
                   <div>
                     <label style={{ display: "block", fontSize: 12, color: C.g500, marginBottom: 6, fontWeight: 600 }}>Amount (USD)</label>
                     <input type="number" value={amount} onChange={e => setAmount(e.target.value)} style={{ width: "100%", border: `1.5px solid ${C.g200}`, borderRadius: 9, padding: "10px 14px", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />

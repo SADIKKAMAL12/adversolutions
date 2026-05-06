@@ -2,6 +2,8 @@ import { usePath, useNavigate } from './Router.jsx'
 import { C, getThemeColors } from './theme.js'
 import { Logo } from './UI.jsx'
 import { useTheme } from './ThemeContext.jsx'
+import { useStore } from './store.js'
+import { useState, useRef, useEffect } from 'react'
 
 const USER_NAV = [
   { path: "/dashboard",             label: "Dashboard",              icon: "⊞"  },
@@ -68,120 +70,110 @@ export function Sidebar({ role, logout }) {
   );
 }
 
+function NotificationBell({ balance, TC }) {
+  const [store] = useStore();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const notifications = [];
+  if ((balance || 0) < 20) {
+    notifications.push({ id: 'low-balance', icon: '💰', title: 'Low Balance', body: `Your balance is $${(balance || 0).toFixed(2)}. Top up to continue.`, color: C.red });
+  }
+  (store.adAccountRequests || []).filter(r => r.status === 'approved' || r.status === 'rejected').forEach(r => {
+    notifications.push({
+      id: `req-${r.id}`,
+      icon: r.status === 'approved' ? '✅' : '❌',
+      title: `Agency Account ${r.status === 'approved' ? 'Approved' : 'Rejected'}`,
+      body: `Your${r.platform ? ' ' + r.platform : ''} account request has been ${r.status}.`,
+      color: r.status === 'approved' ? C.green : C.red,
+    });
+  });
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ width: 38, height: 38, background: TC.g100, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, cursor: 'pointer' }}>
+        🔔
+        {notifications.length > 0 && (
+          <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 17, height: 17, background: C.primary, borderRadius: '50%', fontSize: 9, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, padding: '0 4px' }}>
+            {notifications.length}
+          </span>
+        )}
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: 46, right: 0, width: 320, background: TC.card, borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,.15)', border: `1px solid ${TC.g200}`, zIndex: 999, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${TC.g200}`, fontWeight: 800, fontSize: 13, color: TC.g800 }}>
+            Notifications {notifications.length > 0 && <span style={{ background: C.primary, color: '#fff', fontSize: 10, padding: '1px 7px', borderRadius: 20, marginLeft: 6 }}>{notifications.length}</span>}
+          </div>
+          {notifications.length === 0 ? (
+            <div style={{ padding: '28px 16px', textAlign: 'center', color: TC.g400, fontSize: 13 }}>You're all caught up ✓</div>
+          ) : (
+            notifications.map(n => (
+              <div key={n.id} style={{ padding: '13px 16px', borderBottom: `1px solid ${TC.g100}`, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{n.icon}</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: n.color, marginBottom: 2 }}>{n.title}</div>
+                  <div style={{ fontSize: 12, color: TC.g500, lineHeight: 1.5 }}>{n.body}</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TopBar({ role, user, balance }) {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
   const TC = getThemeColors(isDark);
 
-  // Admin top bar — NO search, theme toggle + profile only
+  const themeBtn = (
+    <button
+      onClick={toggleTheme}
+      title={isDark ? 'Switch to light' : 'Switch to dark'}
+      style={{ width: 38, height: 38, borderRadius: 10, border: `1px solid ${TC.g200}`, background: TC.g50, color: TC.g600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}
+    >
+      {isDark ? '☀️' : '🌙'}
+    </button>
+  );
+
+  const avatar = (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: 38, height: 38, background: `linear-gradient(135deg,${C.primary},#ff6b7a)`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
+        {user?.name?.split(" ").map(w => w[0]).join("").slice(0, 2) || '?'}
+      </div>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: TC.g800 }}>{user?.name || "User"}</div>
+        <div style={{ fontSize: 11, color: TC.g400 }}>{user?.email || ""}</div>
+      </div>
+    </div>
+  );
+
   if (role === "admin") {
     return (
-      <div style={{ height: 62, background: TC.topbar, borderBottom: `1px solid ${TC.g200}`, display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 26px", gap: 16, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            title={isDark ? 'Switch to light' : 'Switch to dark'}
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 10,
-              border: `1px solid ${TC.g200}`,
-              background: TC.g50,
-              color: TC.g600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 16,
-            }}
-          >
-            {isDark ? '☀️' : '🌙'}
-          </button>
-
-          {/* Notifications */}
-          <div style={{ position: "relative", cursor: "pointer" }}>
-            <div style={{ width: 38, height: 38, background: TC.g100, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>🔔</div>
-            <span style={{ position: "absolute", top: -2, right: -2, width: 17, height: 17, background: C.primary, borderRadius: "50%", fontSize: 9, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>3</span>
-          </div>
-
-          {/* Profile: Avatar + Name + Email */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 38, height: 38, background: `linear-gradient(135deg,${C.primary},#ff6b7a)`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
-              {user?.name?.split(" ").map(w => w[0]).join("").slice(0, 2) || '?'}
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: TC.g800 }}>{user?.name}</div>
-              <div style={{ fontSize: 11, color: TC.g400 }}>{user?.email}</div>
-            </div>
-          </div>
-        </div>
+      <div style={{ height: 62, background: TC.topbar, borderBottom: `1px solid ${TC.g200}`, display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 26px", gap: 14, flexShrink: 0 }}>
+        {themeBtn}
+        {avatar}
       </div>
     );
   }
 
-  // USER top bar — profile + balance + theme toggle, NO search
   return (
-    <div style={{
-      height: 62,
-      background: TC.topbar,
-      borderBottom: `1px solid ${TC.g200}`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "flex-end",
-      padding: "0 26px",
-      gap: 16,
-      flexShrink: 0,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        {/* Balance */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 9,
-          background: isDark ? 'rgba(255,51,68,.15)' : '#fef2f3',
-          border: "1px solid rgba(232,25,44,.2)",
-          borderRadius: 10,
-          padding: "7px 16px",
-        }}>
-          <span style={{ fontSize: 13, color: TC.g500 }}>Balance</span>
-          <span style={{ fontSize: 15, fontWeight: 900, color: C.primary }}>
-            ${(balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          title={isDark ? 'Switch to light' : 'Switch to dark'}
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 10,
-            border: `1px solid ${TC.g200}`,
-            background: TC.g50,
-            color: TC.g600,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 16,
-          }}
-        >
-          {isDark ? '☀️' : '🌙'}
-        </button>
-
-        {/* Profile: Avatar + Name + Email */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 38, height: 38, background: `linear-gradient(135deg,${C.primary},#ff6b7a)`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
-            {user?.name?.split(" ").map(w => w[0]).join("").slice(0, 2) || '?'}
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: TC.g800 }}>{user?.name || "User"}</div>
-            <div style={{ fontSize: 11, color: TC.g400 }}>{user?.email || ""}</div>
-          </div>
-        </div>
+    <div style={{ height: 62, background: TC.topbar, borderBottom: `1px solid ${TC.g200}`, display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 26px", gap: 14, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, background: isDark ? 'rgba(255,51,68,.15)' : '#fef2f3', border: "1px solid rgba(232,25,44,.2)", borderRadius: 10, padding: "7px 16px" }}>
+        <span style={{ fontSize: 13, color: TC.g500 }}>Balance</span>
+        <span style={{ fontSize: 15, fontWeight: 900, color: C.primary }}>${(balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
       </div>
+      {themeBtn}
+      <NotificationBell balance={balance} TC={TC} />
+      {avatar}
     </div>
   );
 }
