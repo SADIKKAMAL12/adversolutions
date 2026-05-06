@@ -57,9 +57,9 @@ async function loadHandler(filePath) {
   return handlerCache.get(filePath)
 }
 
-app.all('/api/*', async (req, res) => {
-  // req.path here is everything after /api, e.g. /crud or /admin/stats
-  const fullPath = '/api' + req.path  // restore full path
+app.use('/api', async (req, res) => {
+  // req.path is already stripped of /api prefix, e.g. /crud or /admin/stats
+  const fullPath = '/api' + req.path
   let file, extraQuery = {}
 
   if (CRUD_ROUTES[fullPath]) {
