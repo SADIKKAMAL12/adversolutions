@@ -1,8 +1,19 @@
 import express from 'express'
+import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Load .env into process.env (no external package needed)
+try {
+  const raw = readFileSync(join(__dirname, '.env'), 'utf8')
+  for (const line of raw.split('\n')) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.+)$/)
+    if (m && !process.env[m[1]])
+      process.env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '')
+  }
+} catch { /* .env is optional — env vars can be set via shell */ }
 const app = express()
 
 app.use(express.json({ limit: '10mb' }))
