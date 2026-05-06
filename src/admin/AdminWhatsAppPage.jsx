@@ -14,7 +14,7 @@ export default function AdminWhatsAppPage() {
 
   const poll = async () => {
     try {
-      const r = await fetch('/api/whatsapp-qr')
+      const r = await fetch('/api/whatsapp?type=qr')
       const data = await r.json()
 
       if (data.status === 'connected') {

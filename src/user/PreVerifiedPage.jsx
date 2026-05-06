@@ -36,19 +36,19 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
     setBuyModal(product);
   };
 
-  const confirmBuy = async () => {
+  const confirmBuy = async (orderQty = 1) => {
     if (!buyModal) return;
     const product = buyModal;
     const available = lines.filter(l => (l.productId === product.id || l.product_id === product.id) && l.status === "available");
-    if (available.length === 0 || balance < product.price) return;
+    const toBuy = available.slice(0, orderQty);
+    if (toBuy.length === 0 || balance < product.price * orderQty) return;
 
     setBuying(true);
     setBuyError("");
-    const line = available[0];
     const now = new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    const purchaseId = "PUR-" + Date.now();
+    const totalCost = parseFloat((product.price * orderQty).toFixed(2));
+    const newBalance = parseFloat((balance - totalCost).toFixed(2));
     const orderId = "ORD-" + Date.now();
-    const newBalance = parseFloat((balance - product.price).toFixed(2));
 
     const post = async (url, body) => {
       const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -66,10 +66,9 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
     };
 
     try {
-      // Critical: save purchase record, mark line sold, update balance
       await Promise.all([
-        post('/api/purchases', {
-          id: purchaseId,
+        ...toBuy.map((line, i) => post('/api/purchases', {
+          id: "PUR-" + (Date.now() + i),
           user_id: auth?.id || null,
           product_id: product.id,
           product_title: product.title,
@@ -81,8 +80,8 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
           twofa: line.twofa,
           purchased_at: now,
           logo: product.logo || null,
-        }),
-        put('/api/inventory-lines', { id: line.id, status: 'sold' }),
+        })),
+        ...toBuy.map(line => put('/api/inventory-lines', { id: line.id, status: 'sold' })),
         auth?.id ? put('/api/users', { id: auth.id, balance: newBalance }) : Promise.resolve(),
       ]);
     } catch (err) {
@@ -92,13 +91,12 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
       return;
     }
 
-    // Non-critical: transaction + order logging — failures don't block the purchase
     Promise.all([
       post('/api/transactions', {
         user_id: auth?.id || null,
         type: 'Spent',
         method: 'Pre-Verified Account',
-        amount: -product.price,
+        amount: -totalCost,
         status: 'completed',
         date: now,
       }),
@@ -108,14 +106,14 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
         user_email: auth?.email || '',
         type: 'Pre-Verified Account',
         platform: product.platform,
-        amount: product.price,
+        amount: totalCost,
         status: 'completed',
         date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       }),
     ]).catch(err => console.warn('Logging failed (non-critical):', err.message));
 
-    const localPurchase = {
-      id: purchaseId,
+    const localPurchases = toBuy.map((line, i) => ({
+      id: "PUR-" + (Date.now() + i),
       productId: product.id,
       productTitle: product.title,
       platform: product.platform,
@@ -126,16 +124,16 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
       twofa: line.twofa,
       purchasedAt: now,
       logo: product.logo || null,
-    };
+    }));
 
     setStore(s => ({
       ...s,
       balance: newBalance,
       auth: s.auth ? { ...s.auth, balance: newBalance } : s.auth,
-      purchases: [localPurchase, ...s.purchases],
-      inventoryLines: s.inventoryLines.map(l => l.id === line.id ? { ...l, status: 'sold' } : l),
-      transactions: [{ type: 'Spent', method: 'Pre-Verified Account', amount: -product.price, status: 'completed', date: now }, ...s.transactions],
-      orders: [{ id: orderId, user_email: auth?.email || '', user: auth?.email || '', type: 'Pre-Verified Account', platform: product.platform, amount: product.price, status: 'completed', date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }, ...s.orders],
+      purchases: [...localPurchases, ...s.purchases],
+      inventoryLines: s.inventoryLines.map(l => toBuy.find(tb => tb.id === l.id) ? { ...l, status: 'sold' } : l),
+      transactions: [{ type: 'Spent', method: 'Pre-Verified Account', amount: -totalCost, status: 'completed', date: now }, ...s.transactions],
+      orders: [{ id: orderId, user_email: auth?.email || '', user: auth?.email || '', type: 'Pre-Verified Account', platform: product.platform, amount: totalCost, status: 'completed', date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }, ...s.orders],
     }));
 
     setBuying(false);
@@ -280,12 +278,18 @@ export default function PreVerifiedPage({ products, lines, balance, purchases, s
 function BuyConfirmModal({ product, qty, balance, buying, error, onConfirm, onClose }) {
   const { theme } = useTheme();
   const TC = getThemeColors(theme === 'dark');
-  const canAfford = balance >= product.price;
+  const maxQty = Math.min(qty, Math.floor(balance / product.price)) || 0;
+  const [orderQty, setOrderQty] = useState(Math.min(1, maxQty));
   const hasStock = qty > 0;
-  const afterBalance = canAfford ? (balance - product.price).toFixed(2) : balance.toFixed(2);
+  const totalCost = parseFloat((product.price * orderQty).toFixed(2));
+  const canAfford = balance >= totalCost;
+  const afterBalance = canAfford ? (balance - totalCost).toFixed(2) : balance.toFixed(2);
+
+  const dec = () => setOrderQty(q => Math.max(1, q - 1));
+  const inc = () => setOrderQty(q => Math.min(maxQty, q + 1));
 
   return (
-    <Modal title="Confirm Purchase" onClose={onClose} width={460}>
+    <Modal title="Confirm Purchase" onClose={onClose} width={480}>
       {/* Product preview */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, background: TC.g50, borderRadius: 14, padding: "16px 18px", marginBottom: 20 }}>
         <div style={{ width: 64, height: 64, borderRadius: 14, background: TC.card, border: `1px solid ${TC.g200}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
@@ -304,10 +308,23 @@ function BuyConfirmModal({ product, qty, balance, buying, error, onConfirm, onCl
         </div>
       </div>
 
+      {/* Quantity selector */}
+      {hasStock && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: TC.g50, borderRadius: 12, padding: "12px 18px", marginBottom: 16, border: `1px solid ${TC.g200}` }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: TC.g700 }}>Quantity</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <button onClick={dec} disabled={orderQty <= 1} style={{ width: 34, height: 34, borderRadius: 8, border: `1.5px solid ${TC.g200}`, background: TC.card, color: TC.g700, fontSize: 18, fontWeight: 700, cursor: orderQty <= 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: orderQty <= 1 ? 0.4 : 1, fontFamily: "inherit" }}>−</button>
+            <span style={{ fontSize: 20, fontWeight: 900, color: TC.g800, minWidth: 28, textAlign: "center" }}>{orderQty}</span>
+            <button onClick={inc} disabled={orderQty >= maxQty} style={{ width: 34, height: 34, borderRadius: 8, border: `1.5px solid ${TC.g200}`, background: TC.card, color: TC.g700, fontSize: 18, fontWeight: 700, cursor: orderQty >= maxQty ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: orderQty >= maxQty ? 0.4 : 1, fontFamily: "inherit" }}>+</button>
+          </div>
+          <span style={{ fontSize: 12, color: TC.g400 }}>max {maxQty}</span>
+        </div>
+      )}
+
       {/* Price breakdown */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
         {[
-          ["Price", `$${product.price}.00`, C.primary],
+          [orderQty > 1 ? `$${product.price} × ${orderQty}` : "Price", `$${totalCost.toFixed(2)}`, C.primary],
           ["Your Balance", `$${balance.toFixed(2)}`, TC.g700],
           ["After Purchase", `$${afterBalance}`, canAfford ? C.green : C.red],
         ].map(([label, value, color]) => (
@@ -338,8 +355,8 @@ function BuyConfirmModal({ product, qty, balance, buying, error, onConfirm, onCl
 
       <div style={{ display: "flex", gap: 10 }}>
         <Btn variant="outline" onClick={onClose} disabled={buying} style={{ flex: 1 }}>Cancel</Btn>
-        <Btn onClick={onConfirm} disabled={!canAfford || !hasStock || buying} style={{ flex: 1 }}>
-          {buying ? "Processing…" : `Confirm — $${product.price}.00`}
+        <Btn onClick={() => onConfirm(orderQty)} disabled={!canAfford || !hasStock || buying} style={{ flex: 1 }}>
+          {buying ? "Processing…" : `Confirm — $${totalCost.toFixed(2)}`}
         </Btn>
       </div>
     </Modal>

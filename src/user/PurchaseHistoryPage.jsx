@@ -84,13 +84,13 @@ export default function PurchaseHistoryPage({ purchases }) {
         {/* Header */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '2fr 120px 1fr 140px 80px',
+          gridTemplateColumns: '200px 1fr 150px 90px',
           gap: 0,
           background: C.g50,
           borderBottom: `1px solid ${C.g200}`,
           padding: '12px 20px',
         }}>
-          {['Product', 'Platform', 'Credentials', 'Purchased', 'Price'].map(h => (
+          {['Product', 'Credentials', 'Purchased', 'Price'].map(h => (
             <div key={h} style={{ fontSize: 11, fontWeight: 800, color: C.g400, textTransform: 'uppercase', letterSpacing: .7 }}>{h}</div>
           ))}
         </div>
@@ -106,32 +106,25 @@ export default function PurchaseHistoryPage({ purchases }) {
             return (
               <div key={p.id} style={{
                 display: 'grid',
-                gridTemplateColumns: '2fr 120px 1fr 140px 80px',
+                gridTemplateColumns: '200px 1fr 150px 90px',
                 gap: 0,
                 padding: '16px 20px',
                 borderBottom: i < filtered.length - 1 ? `1px solid ${C.g100}` : 'none',
                 alignItems: 'center',
               }}>
                 {/* Product */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: C.g50, border: `1px solid ${C.g200}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <PlatformIcon name={p.platform} size={22} logo={p.logo} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: C.g50, border: `1px solid ${C.g200}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <PlatformIcon name={p.platform} size={20} logo={p.logo} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800, fontSize: 13, color: C.g800, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.productTitle || '—'}</div>
-                    <div style={{ fontSize: 11, color: C.g400 }}>ID: {p.id}</div>
+                    <span style={{ background: C.blueL, color: C.blue, fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20 }}>{p.platform}</span>
                   </div>
                 </div>
 
-                {/* Platform */}
-                <div>
-                  <span style={{ background: C.blueL, color: C.blue, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
-                    {p.platform}
-                  </span>
-                </div>
-
                 {/* Credentials */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, paddingRight: 12 }}>
                   <div style={{
                     fontFamily: 'monospace', fontSize: 12, color: C.g700, fontWeight: 600,
                     background: C.g50, borderRadius: 7, padding: '6px 10px',

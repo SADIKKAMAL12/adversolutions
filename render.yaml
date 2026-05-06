@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: adversolutions-whatsapp
+    runtime: node
+    plan: free
+    repo: https://github.com/SADIKKAMAL12/adversolutions.git
+    rootDir: whatsapp-server
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: PORT
+        value: 3001

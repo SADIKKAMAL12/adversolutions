@@ -82,7 +82,7 @@ function StepOTP({ phone, onVerified, onBack }) {
     setSending(true)
     setError('')
     try {
-      const r = await fetch('/api/send-otp', {
+      const r = await fetch('/api/otp?action=send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone }),
@@ -103,7 +103,7 @@ function StepOTP({ phone, onVerified, onBack }) {
     setVerifying(true)
     setError('')
     try {
-      const r = await fetch('/api/verify-otp', {
+      const r = await fetch('/api/otp?action=verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, otp }),
