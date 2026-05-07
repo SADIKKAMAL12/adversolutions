@@ -93,6 +93,47 @@ app.get('/status', (req, res) => {
   });
 });
 
+// GET /info — connected account info
+app.get('/info', (req, res) => {
+  if (!isReady || !client?.info) {
+    return res.json({ connected: false });
+  }
+  res.json({
+    connected: true,
+    pushname: client.info.pushname || null,
+    phone: client.info.wid?.user || null,
+    platform: client.info.platform || null,
+  });
+});
+
+// POST /disconnect — logout and clear session (will need QR scan again)
+app.post('/disconnect', async (req, res) => {
+  try {
+    if (client) {
+      await client.logout().catch(() => client.destroy());
+    }
+    isReady = false;
+    qrData = null;
+    res.json({ success: true });
+    setTimeout(initClient, 2000);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /reconnect — force restart without clearing session
+app.post('/reconnect', async (req, res) => {
+  try {
+    if (client) await client.destroy().catch(() => {});
+    isReady = false;
+    qrData = null;
+    res.json({ success: true });
+    setTimeout(initClient, 1000);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /qr — get QR code as base64 image
 app.get('/qr', async (req, res) => {
   if (isReady) {
