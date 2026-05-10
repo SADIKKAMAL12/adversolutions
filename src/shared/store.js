@@ -137,6 +137,22 @@ export function useStoreValue(selector) {
   return state;
 }
 
+export function useHydrated() {
+  const [ready, setReady] = useState(_hydrated);
+  useEffect(() => {
+    if (_hydrated) { setReady(true); return; }
+    const unsub = subscribeStore(() => {
+      if (_hydrated) setReady(true);
+    });
+    return unsub;
+  }, []);
+  return ready;
+}
+
+export function resetHydration() {
+  _hydrated = false;
+}
+
 export function resetStore() {
   _store = { ...DEMO_STORE };
   _listeners.forEach(fn => fn(_store));
@@ -204,8 +220,9 @@ export async function hydrateStore() {
       fetchTransactions(userId),
       fetchOrders(userId),
       fetchDeposits(userId),
-      fetchTickets(),
-      fetchAdAccountRequests(),
+      // Support tickets — filter by user for non-admins
+      isAdmin ? fetchTickets() : fetchTickets(userId),
+      fetchAdAccountRequests(userId),
       fetchPurchases(userId),
     ]);
 

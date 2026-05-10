@@ -1,9 +1,27 @@
 const API_BASE = '/api'
 
+function getAuthToken() {
+  try {
+    const raw = localStorage.getItem('adver_auth_v1')
+    if (!raw) return null
+    const session = JSON.parse(raw)
+    return session?.token || null
+  } catch {
+    return null
+  }
+}
+
+function authHeaders(extra = {}) {
+  const token = getAuthToken()
+  const headers = { 'Content-Type': 'application/json', ...extra }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return headers
+}
+
 async function apiGet(endpoint, params = {}) {
   const qs = new URLSearchParams(params).toString()
   const url = qs ? `${endpoint}?${qs}` : endpoint
-  const res = await fetch(url)
+  const res = await fetch(url, { headers: authHeaders({ 'Content-Type': undefined }) })
   const text = await res.text()
   let data
   try { data = JSON.parse(text) } catch {
@@ -17,7 +35,7 @@ async function apiGet(endpoint, params = {}) {
 async function apiPost(endpoint, body) {
   const res = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(body),
   })
   const text = await res.text()
@@ -33,7 +51,7 @@ async function apiPost(endpoint, body) {
 async function apiPut(endpoint, body) {
   const res = await fetch(endpoint, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(body),
   })
   const text = await res.text()
@@ -47,7 +65,10 @@ async function apiPut(endpoint, body) {
 }
 
 async function apiDelete(endpoint, id) {
-  const res = await fetch(`${endpoint}?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+  const res = await fetch(`${endpoint}?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders({ 'Content-Type': undefined }),
+  })
   const text = await res.text()
   let data
   try { data = JSON.parse(text) } catch {
@@ -210,8 +231,10 @@ export async function deleteBusinessType(id) {
 // SUPPORT TICKETS
 // ========================
 
-export async function fetchTickets() {
-  return apiGet(`${API_BASE}/support-tickets`, { order: 'created_at', ascending: 'false' })
+export async function fetchTickets(userId = null) {
+  const params = { order: 'created_at', ascending: 'false' }
+  if (userId) params.user_id = userId
+  return apiGet(`${API_BASE}/support-tickets`, params)
 }
 
 export async function createTicket(ticket) {
@@ -222,8 +245,10 @@ export async function createTicket(ticket) {
 // AD ACCOUNT REQUESTS
 // ========================
 
-export async function fetchAdAccountRequests() {
-  const data = await apiGet(`${API_BASE}/ad-account-requests`, { order: 'created_at', ascending: 'false' })
+export async function fetchAdAccountRequests(userId = null) {
+  const params = { order: 'created_at', ascending: 'false' }
+  if (userId) params.user_id = userId
+  const data = await apiGet(`${API_BASE}/ad-account-requests`, params)
   return (data || []).map(r => ({
     ...r,
     accountName:  r.account_name   ?? r.accountName,
@@ -239,6 +264,10 @@ export async function fetchAdAccountRequests() {
 
 export async function createAdAccountRequest(req) {
   return apiPost(`${API_BASE}/ad-account-requests`, req)
+}
+
+export async function updateAdAccountRequest(id, updates) {
+  return apiPut(`${API_BASE}/ad-account-requests`, { id, ...updates })
 }
 
 // ========================
